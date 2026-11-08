@@ -14,7 +14,7 @@ import { pagePlaces, pageVisibilities, type PagePlace, type PageRole, type PageS
 import type { EraserPageEntry } from "@/lib/eraser-page-blueprints"
 import { explorerPages, matchesExplorerQuery, sectionFolderPlan, type ExplorerPage } from "@/lib/page-explorer"
 import { applyFolderOps, childFolders, flattenFolders, folderCounts, folderPath, folderPathLabel, newFolderId, type FolderOp, type PageFolder, type PageFolders } from "@/lib/page-folders"
-import { PagesIndexView, pageViewKinds } from "@/components/eraser/pages-index-views"
+import { PagesIndexView, pageViewKinds } from "./pages-index-views"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import type { PagesIndexRow } from "@/lib/pages-index-shared"
 import type { ViewBlockKind } from "@/lib/custom-pages"

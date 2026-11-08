@@ -8,7 +8,14 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
 ## Ce qui vit où
 
 - Ici : l'interface de l'atelier (`src/`). `src/main.tsx` exporte `Page`, qui choisit l'écran
-  d'après `eraser.path` : `[]` Index des pages, `["atelier", id]`, `["menu"]`.
+  d'après `eraser.path` : `[]` Index des pages, `["atelier", id]`, `["menu"]`,
+  `["apparences", index]` (`src/appearances.tsx` : survols, cartes, formulaires et présentations
+  d'un index ; l'éditeur `IndexEditor` d'Eraser en `scope="atelier"`).
+- Droits **par module**, jamais par extension : les pages et le menu, les administrateurs ; les
+  apparences des index, les MJ et les administrateurs (`eraser.account.role`). Les API d'Eraser
+  vérifient toujours.
+- Le « Modifier » d'un index (dans Eraser, `scope="moteur"`) ne garde que colonnes, formulaire
+  principal, carte officielle, stats et affichage des items : l'apparence se crée ici.
 - Dans Eraser : l'affichage des pages (tous les joueurs les lisent), le modèle des pages
   (`lib/custom-pages.ts`), les API d'enregistrement (qui vérifient les droits), et les données
   de chaque écran (`GET /api/pages/atelier?ecran=index|page|menu`, `lib/page-atelier-data.ts`).
