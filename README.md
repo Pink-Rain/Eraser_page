@@ -1,21 +1,16 @@
 # Eraser Page
 
-Extension d'[Eraser](https://github.com/Pink-Rain/Eraser), l'application de JDR : l'atelier des pages (créer et modifier les pages d'Eraser et le menu).
-
-Ce dépôt ne contient pas encore de code. L'extension sera construite ici, à part de l'application
-principale, et publiée sans réinstaller Eraser.
+Extension d'[Eraser](https://github.com/Pink-Rain/Eraser), l'application de JDR : l'atelier des
+pages (l'Index des pages, l'atelier d'une page et l'éditeur du menu latéral).
 
 ## Comment elle arrive dans Eraser
 
-- Elle est liée à Eraser sous l'identifiant `page` (`lib/extensions.ts` du dépôt Eraser). Une extension
-  se lie dans le code d'Eraser, jamais depuis l'application.
-- Chaque version publiée (une Release GitHub de ce dépôt) joint deux fichiers :
-  `eraser-extension.json` (identifiant, version, version d'API, empreinte SHA-256) et
-  `eraser-extension.pack.gz` (les fichiers de l'extension). Ils sont fabriqués par
-  `scripts/pack-extension.mjs`, recopié depuis Eraser.
-- Dans Eraser, **Administration › Extensions** choisit qui la reçoit : joueurs, MJ, admins. Leurs
-  installations la téléchargent, la vérifient et la mettent à jour toutes seules.
-- Elle s'ouvre dans Eraser à l'adresse `/extension/page`, avec la barre latérale d'Eraser.
+- Elle est liée à Eraser sous l'identifiant `page` (`lib/extensions.ts` du dépôt Eraser).
+- Chaque version publiée (une Release GitHub de ce dépôt, faite par le workflow) joint
+  `eraser-extension.json` et `eraser-extension.pack.gz`.
+- Toutes les installations d'Eraser la téléchargent, la vérifient et la mettent à jour seules (au
+  lancement, toutes les six heures, et avec « Chercher les mises à jour »). Seuls les
+  administrateurs l'ouvrent, à l'adresse `/extension/page`, ou par « Pages » dans le menu et
+  « Modifier la page » dans l'en-tête.
 
-Le contrat complet (module `mount`, partie serveur, données partagées, version d'API) est décrit
-dans la section « Extensions » de l'[ARCHITECTURE.md d'Eraser](https://github.com/Pink-Rain/Eraser/blob/windows-app-migration/ARCHITECTURE.md).
+Pour travailler dessus : voir `AGENTS.md`.
