@@ -24,6 +24,9 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
   qu'Eraser ne prête pas encore s'ajoute là-bas (jamais un module qui tire du code serveur ; on
   n'importe d'un tel module que des types).
 - Un nouveau type de bloc touche les deux dépôts : l'affichage dans Eraser, l'édition ici.
+- Ce qui charge encore porte `aria-busy="true"` (écran `Screen`, apparences) : le relevé de
+  fluidité d'Eraser compte l'ouverture de l'extension, et le changement de page, jusqu'à ce qu'il
+  n'y en ait plus. Un nouvel écran qui lit ses données fait de même.
 
 ## Construire et vérifier
 

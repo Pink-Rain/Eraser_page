@@ -1,10 +1,7 @@
-# Eraser Page 0.2.0 — Les apparences des index
+# Eraser Page 0.2.1 — Mesurée par le relevé de fluidité
 
-- **Apparences d'un index** (`/extension/page/apparences/<index>`, bouton « Apparences » sur la
-  page de chaque index) : ses survols, ses cartes, ses formulaires et ses présentations (liste,
-  kanban, calendrier, chronologie, galerie, arborescence, codex, tableau de bord), réglés ici et
-  non plus dans le « Modifier » de l'index. Ouvert aux MJ et aux administrateurs.
-- **Droits par module** : l'Index des pages, l'atelier d'une page et l'éditeur du menu restent aux
-  administrateurs.
-- L'affichage des pages dans l'Index des pages (« Modifier l'affichage ») vit maintenant ici.
-- Demande Eraser 0.1.1-alpha.276 ou plus récent (API des extensions 2).
+- Les écrans de l'atelier (Index des pages, atelier d'une page, menu, apparences d'un index)
+  signalent qu'ils chargent encore (`aria-busy`). Avec Eraser 0.1.1-alpha.277 ou plus récent, le
+  relevé « Fluidité de cet ordinateur » compte leur ouverture jusqu'au contenu prêt, avec la
+  version de l'extension.
+- Rien ne change à l'usage.

@@ -112,7 +112,7 @@ function Screen<T>({ eraser, url, label, children }: { eraser: EraserContext; ur
       .catch(() => { if (alive) setState({ error: "Eraser ne répond pas : réessaie dans un instant." }) })
     return () => { alive = false }
   }, [eraser, url])
-  if (!state) return <div className="grid min-h-[40svh] place-items-center text-muted-foreground"><LoaderCircle className="size-5 animate-spin" aria-label={`Ouverture : ${label}`} /></div>
+  if (!state) return <div aria-busy="true" className="grid min-h-[40svh] place-items-center text-muted-foreground"><LoaderCircle className="size-5 animate-spin" aria-label={`Ouverture : ${label}`} /></div>
   if ("error" in state) {
     return <div className="w-full flex-1 px-5 py-9 sm:px-8 md:py-14">
       <div className="grid min-h-52 place-items-center rounded-2xl border border-dashed bg-card/35 p-8 text-center">

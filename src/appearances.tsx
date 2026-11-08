@@ -59,7 +59,7 @@ export function Appearances({ indexKey, tab, mode }: { indexKey: string; tab: st
   const back = () => router.push(loaded?.data.definition.path ?? "/ressources")
 
   if (error) return <Notice title="Apparences" text={error} />
-  if (!loaded || !samples) return <div className="grid min-h-[40svh] place-items-center text-muted-foreground"><LoaderCircle className="size-5 animate-spin" aria-label="Ouverture des apparences" /></div>
+  if (!loaded || !samples) return <div aria-busy="true" className="grid min-h-[40svh] place-items-center text-muted-foreground"><LoaderCircle className="size-5 animate-spin" aria-label="Ouverture des apparences" /></div>
   return <>
     <Notice title={`Apparences · ${title}`} text="Les survols, les cartes, les formulaires et les présentations de cet index. Les colonnes, le formulaire principal et la carte officielle se règlent dans « Modifier », sur la page de l’index." />
     <IndexEditor
