@@ -1,7 +1,9 @@
-# Eraser Page 0.2.1 — Mesurée par le relevé de fluidité
+# Eraser Page 0.3.0 — L'éditeur des apparences vit dans l'extension
 
-- Les écrans de l'atelier (Index des pages, atelier d'une page, menu, apparences d'un index)
-  signalent qu'ils chargent encore (`aria-busy`). Avec Eraser 0.1.1-alpha.277 ou plus récent, le
-  relevé « Fluidité de cet ordinateur » compte leur ouverture jusqu'au contenu prêt, avec la
-  version de l'extension.
-- Rien ne change à l'usage.
+- **Les apparences d'un index** (survols, cartes, formulaires, présentations) et « Modifier
+  l'affichage » de l'Index des pages ont leur propre éditeur, dans l'extension. Il remplace le
+  « Modifier » d'Eraser en mode atelier : mêmes onglets, mêmes réglages, mêmes clés enregistrées.
+- L'éditeur des présentations (liste, kanban, calendrier, chronologie, galerie, arborescence,
+  codex, tableau de bord), leurs modèles de départ, la grille des sections et l'explorateur de
+  l'Index des pages sont maintenant dans l'extension, plus dans Eraser.
+- Demande Eraser 0.1.1-alpha.278 ou plus récent (pièces prêtées aux extensions).

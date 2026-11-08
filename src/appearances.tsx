@@ -4,18 +4,19 @@
  * l'atelier des pages, et non plus dans le « Modifier » de l'index. Le moteur n'y garde que ses
  * colonnes, son formulaire principal et sa carte officielle.
  *
- * L'éditeur est celui d'Eraser (`IndexEditor`, prêté), en périmètre « atelier » ; les réglages
- * s'enregistrent comme avant (`useIndexSettings`, mêmes clés sur le serveur partagé), pour toute
- * la table. Réservé aux MJ et aux administrateurs, comme les index ; Eraser vérifie les droits.
+ * L'éditeur est celui de l'extension (`AppearancesEditor`) ; les réglages s'enregistrent comme
+ * avant (`useIndexSettings`, mêmes clés sur le serveur partagé), pour toute la table. Réservé aux
+ * MJ et aux administrateurs, comme les index ; Eraser vérifie les droits.
  */
 import { useEffect, useMemo, useState } from "react"
 import { useRouter } from "next/navigation"
 import { LoaderCircle, Palette } from "lucide-react"
 
-import { IndexEditor } from "@/components/eraser/index-editor"
 import { useIndexSettings } from "@/components/eraser/index-windows"
 import type { IndexEditorModel } from "@/lib/index-schema-shared"
 import type { WorldIndexData } from "@/lib/world-indexes"
+
+import { AppearancesEditor, appearanceMode } from "./appearances-editor"
 
 type Loaded = { model: IndexEditorModel; data: WorldIndexData }
 
@@ -62,16 +63,15 @@ export function Appearances({ indexKey, tab, mode }: { indexKey: string; tab: st
   if (!loaded || !samples) return <div aria-busy="true" className="grid min-h-[40svh] place-items-center text-muted-foreground"><LoaderCircle className="size-5 animate-spin" aria-label="Ouverture des apparences" /></div>
   return <>
     <Notice title={`Apparences · ${title}`} text="Les survols, les cartes, les formulaires et les présentations de cet index. Les colonnes, le formulaire principal et la carte officielle se règlent dans « Modifier », sur la page de l’index." />
-    <IndexEditor
+    <AppearancesEditor
       model={loaded.model}
-      scope="atelier"
       open
       title={`Apparences · ${title}`}
       intro="Survols, cartes, formulaires et présentations : enregistrés pour toute la table, ils servent dans l’index et dans les pages."
-      initialMode={(mode as Parameters<typeof IndexEditor>[0]["initialMode"]) ?? "cards"}
+      initialMode={appearanceMode(mode) ?? "cards"}
       initialTab={tab ?? loaded.data.tables[0]?.tabName}
       onClose={back}
-      onApply={back}
+      onSaved={back}
       layouts={settings.layouts}
       onSaveLayouts={settings.saveLayouts}
       cardsIndex={indexKey}

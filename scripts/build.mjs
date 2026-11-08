@@ -31,10 +31,19 @@ await mkdir(work, { recursive: true })
 
 /** Ce qu'Eraser prête : un module CommonJS qui rend celui d'Eraser (imports nommés compris). */
 const lentPackages = new Set(["react", "react/jsx-runtime", "react/compiler-runtime", "react-dom", "react-dom/client", "next/link", "next/navigation"])
+// La liste de ce qu'Eraser prête vraiment (components/eraser/extension-modules.ts) : un import
+// qu'il ne prête pas ferait tomber l'extension à l'ouverture (« Eraser ne prête pas… »).
+const lending = await readFile(join(eraser, "components", "eraser", "extension-modules.ts"), "utf8")
+const lentIds = new Set([...lending.matchAll(/^\s*"([^"]+)": lent\(/gm)].map((match) => match[1]))
+const borrowed = new Set()
 const eraserModules = {
   name: "eraser-modules",
   setup(builder) {
-    builder.onResolve({ filter: /.*/ }, (args) => (args.path.startsWith("@/") || lentPackages.has(args.path)) ? { path: args.path, namespace: "eraser" } : undefined)
+    builder.onResolve({ filter: /.*/ }, (args) => {
+      if (!args.path.startsWith("@/") && !lentPackages.has(args.path)) return undefined
+      borrowed.add(args.path)
+      return { path: args.path, namespace: "eraser" }
+    })
     builder.onLoad({ filter: /.*/, namespace: "eraser" }, (args) => ({
       contents: `module.exports = window.EraserExtensions.require(${JSON.stringify(args.path)})`,
       loader: "js",
@@ -74,6 +83,8 @@ await build({
   plugins: [eraserModules, reactCompiler],
   logLevel: "warning",
 })
+const missing = [...borrowed].filter((id) => !lentIds.has(id)).sort()
+if (missing.length) throw new Error(`Eraser (${eraser}) ne prête pas : ${missing.join(", ")}. Les ajouter à components/eraser/extension-modules.ts d'Eraser (publié d'abord), ou les garder dans src/.`)
 
 /** Les règles de thème d'Eraser (`@theme`, `@utility`, `@custom-variant`), sans le reste de sa feuille. */
 function themeRules(css) {

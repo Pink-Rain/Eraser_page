@@ -16,7 +16,7 @@ import { PageSearchBlock, PageSearchProvider, PageStatBlock, PageViewBlock } fro
 import { describeCondition } from "@/lib/index-windows"
 import { rowOfRoute } from "@/lib/page-replacements"
 import { blockIcons } from "./page-studio-icons"
-import { ColumnCount, SectionGrid, WidthRuler } from "@/components/eraser/page-section-grid"
+import { ColumnCount, SectionGrid, WidthRuler } from "./page-section-grid"
 import { BlockSettings, PageSettings, Segmented, VisibilityPill, roleDot } from "./page-studio-settings"
 import { IndexRichText } from "@/components/eraser/index-references"
 import { RichTextField } from "@/components/eraser/rich-text"

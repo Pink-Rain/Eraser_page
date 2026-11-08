@@ -2,12 +2,13 @@ import { useMemo, useState } from "react"
 import { Settings2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { IndexEditor } from "@/components/eraser/index-editor"
 import { useIndexSettings } from "@/components/eraser/index-windows"
 import { PageSearchQuery, PageViewBlock } from "@/components/eraser/page-index-block"
 import { newBlock, type ViewBlock, type ViewBlockKind } from "@/lib/custom-pages"
 import { lockedPolicy, type IndexEditorModel } from "@/lib/index-schema-shared"
 import { PAGES_INDEX, PAGES_INDEX_TITLE, PAGES_TAB, pagesIndexColumns, pagesIndexHeaders, pagesIndexValues, type PagesIndexRow } from "@/lib/pages-index-shared"
+
+import { AppearancesEditor } from "./appearances-editor"
 
 /**
  * L'Index des pages vu par le moteur des index : les pages (celles de l'atelier et celles
@@ -67,16 +68,15 @@ export function PagesIndexView({ kind, query, rows }: { kind: Exclude<ViewBlockK
     <PageSearchQuery query={query}>
       <PageViewBlock key={`${kind}:${version}`} block={block} source={{ direct: true }} />
     </PageSearchQuery>
-    {editing && <IndexEditor
+    {editing && <AppearancesEditor
       model={pagesEditorModel()}
-      scope="atelier"
       open
       title="Modifier l’affichage des pages"
       intro="Les cartes, le survol et les vues des pages. Les colonnes viennent des pages : elles se changent dans l’atelier."
       initialMode={kind === "cards" ? "cards" : `view:${kind}`}
       initialTab={PAGES_TAB}
       onClose={() => setEditing(false)}
-      onApply={() => { setEditing(false); setVersion((value) => value + 1) }}
+      onSaved={() => { setEditing(false); setVersion((value) => value + 1) }}
       layouts={settings.layouts}
       onSaveLayouts={async (changes) => { await settings.saveLayouts(changes); setVersion((value) => value + 1) }}
       cardsIndex={PAGES_INDEX}

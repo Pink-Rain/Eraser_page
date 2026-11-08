@@ -10,7 +10,14 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
 - Ici : l'interface de l'atelier (`src/`). `src/main.tsx` exporte `Page`, qui choisit l'écran
   d'après `eraser.path` : `[]` Index des pages, `["atelier", id]`, `["menu"]`,
   `["apparences", index]` (`src/appearances.tsx` : survols, cartes, formulaires et présentations
-  d'un index ; l'éditeur `IndexEditor` d'Eraser en `scope="atelier"`).
+  d'un index).
+- **L'éditeur des apparences est ici** (`src/appearances-editor.tsx`, aussi pour « Modifier
+  l'affichage » de l'Index des pages), avec l'éditeur des présentations
+  (`src/presentations-editor.tsx`, `src/presentation-starters.ts`), la grille des sections
+  (`src/page-section-grid.tsx`) et l'explorateur de l'Index des pages (`src/page-explorer.ts`).
+  N'emprunter à Eraser que ce qu'il utilise lui-même (le moteur garde l'éditeur de mise en page
+  pour le formulaire principal, celui des cartes pour la carte officielle) : ce qui ne sert qu'à
+  l'atelier vit ici, jamais dans Eraser.
 - Droits **par module**, jamais par extension : les pages et le menu, les administrateurs ; les
   apparences des index, les MJ et les administrateurs (`eraser.account.role`). Les API d'Eraser
   vérifient toujours.
@@ -32,7 +39,8 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
 
 - Une copie d'Eraser (avec ses dépendances) est nécessaire : `ERASER_DIR=/chemin/vers/Eraser`, ou
   `./eraser`. Dans une session cloud, Eraser est souvent cloné dans `/home/user/Eraser`.
-- `npm run build` : esbuild (React Compiler compris) et Tailwind avec le thème d'Eraser. Les
+- `npm run build` : esbuild (React Compiler compris) et Tailwind avec le thème d'Eraser. Il échoue
+  si `src/` importe un module qu'Eraser ne prête pas (`components/eraser/extension-modules.ts`). Les
   classes qu'Eraser produit déjà sont exclues (sinon, chargées après sa feuille, elles passent
   devant ses variantes) : construire contre la version d'Eraser qui fera tourner l'extension.
 - `npm run check` : types de `src/` avec ceux d'Eraser.
