@@ -44,6 +44,8 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
   classes qu'Eraser produit déjà sont exclues (sinon, chargées après sa feuille, elles passent
   devant ses variantes) : construire contre la version d'Eraser qui fera tourner l'extension.
 - `npm run check` : types de `src/` avec ceux d'Eraser.
+- `npm test` : `tests/*.test.mjs`, qui chargent `src/` et les modules d'Eraser comme à l'exécution
+  (`tests/eraser.mjs`, Vite de la copie d'Eraser).
 - `npm run pack` : `release/eraser-extension.json` et `release/eraser-extension.pack.gz`.
 
 ## Publier

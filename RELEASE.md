@@ -1,9 +1,7 @@
-# Eraser Page 0.3.0 — L'éditeur des apparences vit dans l'extension
+# Eraser Page 0.3.1 — Construite contre Eraser alpha 279
 
-- **Les apparences d'un index** (survols, cartes, formulaires, présentations) et « Modifier
-  l'affichage » de l'Index des pages ont leur propre éditeur, dans l'extension. Il remplace le
-  « Modifier » d'Eraser en mode atelier : mêmes onglets, mêmes réglages, mêmes clés enregistrées.
-- L'éditeur des présentations (liste, kanban, calendrier, chronologie, galerie, arborescence,
-  codex, tableau de bord), leurs modèles de départ, la grille des sections et l'explorateur de
-  l'Index des pages sont maintenant dans l'extension, plus dans Eraser.
-- Demande Eraser 0.1.1-alpha.278 ou plus récent (pièces prêtées aux extensions).
+- Reconstruite contre Eraser 0.1.1-alpha.279 : l'éditeur des présentations n'est plus dans Eraser,
+  ses styles sont maintenant ceux de l'extension (rien ne change à l'écran).
+- Les tests de l'éditeur des présentations (formes de départ) et de l'explorateur de l'Index des
+  pages sont arrivés d'Eraser avec leur code (`npm test`, lancé à chaque publication).
+- Demande Eraser 0.1.1-alpha.279 ou plus récent.
