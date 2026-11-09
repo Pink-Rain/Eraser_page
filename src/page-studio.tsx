@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react"
 import {
   ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookmarkPlus, Check, CloudAlert, CloudCheck, CloudUpload, Copy, Ellipsis, Eye, EyeOff, Hammer, History, LibraryBig,
-  LoaderCircle, LockKeyhole, NotebookPen, Plus, RotateCcw, Search, Settings2, SquareMousePointer, Trash2, Undo2, WandSparkles, X,
+  LoaderCircle, LockKeyhole, NotebookPen, Palette as PaletteIcon, Plus, RotateCcw, Search, Settings2, SquareMousePointer, Trash2, Undo2, WandSparkles, X,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,7 @@ import { blockIcons } from "./page-studio-icons"
 import { ColumnCount, SectionGrid, WidthRuler } from "./page-section-grid"
 import { BlockSettings, PageSettings, Segmented, VisibilityPill, roleDot } from "./page-studio-settings"
 import { FicheBar, useFicheExample } from "./fiche-page-ui"
+import { BlockAppearanceStudio } from "./block-appearance"
 import { IndexRichText } from "@/components/eraser/index-references"
 import { RichTextField } from "@/components/eraser/rich-text"
 import {
@@ -275,6 +276,8 @@ export function PageStudio({ initial, pages: initialPages, campaigns, linking, r
   const [doc, setDoc] = useState(initial)
   const docRef = useRef(initial)
   const [selected, setSelected] = useState<string | null>(null)
+  // Le bloc Vue dont l'apparence se règle en grand (forme, cartes, présentation).
+  const [appearanceOf, setAppearanceOf] = useState<string | null>(null)
   const [mode, setMode] = useState<"build" | "preview">("build")
   const [viewAs, setViewAs] = useState<PageRole>(role)
   const [showHidden, setShowHidden] = useState(true)
@@ -664,6 +667,7 @@ export function PageStudio({ initial, pages: initialPages, campaigns, linking, r
   /* ----- Ce qu'on montre ----- */
 
   const selectedBlock = selected ? (() => { const at = locate(doc.sections, selected); return at ? doc.sections[at.si].cols[at.ci][at.bi] : null })() : null
+  const appearanceBlock = appearanceOf ? (() => { const at = locate(doc.sections, appearanceOf); const found = at ? doc.sections[at.si].cols[at.ci][at.bi] : null; return found?.type === "view" ? found : null })() : null
   const sectionCount = doc.sections.length
   const roleChoices: PageRole[] = isAdmin ? ["admin", "mj", "joueur"] : ["mj", "joueur"]
   const pageClosed = !pageVisibleTo(doc.vis, viewAs) || !placeOpenTo(doc.place, viewAs)
@@ -734,6 +738,7 @@ export function PageStudio({ initial, pages: initialPages, campaigns, linking, r
       <Button type="button" size="sm" variant="outline" onClick={() => void flush()}>Réessayer</Button>
     </div>}
     {doc.rowOf?.index && <FicheBar rowOf={doc.rowOf} fiche={fiche} onPreview={previewFiche} onOpen={(target) => { void flush().then((ok) => { if (ok) router.push(target) }) }} />}
+    {appearanceBlock && <BlockAppearanceStudio key={appearanceBlock.id} block={appearanceBlock} onApply={(patch) => updateBlock(appearanceBlock.id, patch)} onClose={() => setAppearanceOf(null)} />}
 
     <div className={`grid items-start gap-3.5 ${mode === "build" ? "min-[960px]:grid-cols-[232px_minmax(0,1fr)_316px] min-[1400px]:grid-cols-[248px_minmax(0,1fr)_336px]" : ""}`}>
       {mode === "build" && <aside aria-label="Blocs" className={paneClass(drawer === "palette")}>
@@ -815,6 +820,7 @@ export function PageStudio({ initial, pages: initialPages, campaigns, linking, r
                           {section.cols.length > 1 && <ToolButton label="Colonne de gauche (Alt+←)" disabled={ci === 0} onClick={() => move(block.id, "left")}><ArrowLeft className="size-3.5" /></ToolButton>}
                           {section.cols.length > 1 && <ToolButton label="Colonne de droite (Alt+→)" disabled={ci === section.cols.length - 1} onClick={() => move(block.id, "right")}><ArrowRight className="size-3.5" /></ToolButton>}
                           <ToolButton label="Dupliquer" onClick={() => duplicate(block.id)}><Copy className="size-3.5" /></ToolButton>
+                          {block.type === "view" && block.tab && !block.savedViewId && <ToolButton label="Modifier l’apparence (tableau, cartes, liste, chronologie…)" onClick={() => { select(block.id); setAppearanceOf(block.id) }}><PaletteIcon className="size-3.5" /></ToolButton>}
                           <ToolButton label="Régler" onClick={() => select(block.id, true)}><Settings2 className="size-3.5" /></ToolButton>
                           <ToolButton label="Supprimer" danger onClick={() => remove(block.id)}><Trash2 className="size-3.5" /></ToolButton>
                         </span>
@@ -849,7 +855,7 @@ export function PageStudio({ initial, pages: initialPages, campaigns, linking, r
         </div>
         <div className="pb-4">
           {selectedBlock
-            ? <BlockSettings key={selectedBlock.id} block={selectedBlock} pages={pages} live={doc.live[selectedBlock.id]} rowOf={doc.rowOf ?? (rowOfRoute(doc.replaces) ? { index: rowOfRoute(doc.replaces)!.index } : undefined)} onChange={(patch, coalesce) => updateBlock(selectedBlock.id, patch, coalesce ? `${selectedBlock.id}:${coalesce}` : undefined)} onDuplicate={() => duplicate(selectedBlock.id)} onRemove={() => remove(selectedBlock.id)} onPage={() => select(null)} />
+            ? <BlockSettings key={selectedBlock.id} block={selectedBlock} pages={pages} live={doc.live[selectedBlock.id]} rowOf={doc.rowOf ?? (rowOfRoute(doc.replaces) ? { index: rowOfRoute(doc.replaces)!.index } : undefined)} onChange={(patch, coalesce) => updateBlock(selectedBlock.id, patch, coalesce ? `${selectedBlock.id}:${coalesce}` : undefined)} onDuplicate={() => duplicate(selectedBlock.id)} onRemove={() => remove(selectedBlock.id)} onPage={() => select(null)} onAppearance={selectedBlock.type === "view" ? () => setAppearanceOf(selectedBlock.id) : undefined} />
             : <PageSettings page={doc} pages={initialPages} campaigns={campaigns} isAdmin={isAdmin} linking={linking} busy={busy} saveError={save.kind === "error" && save.message && /adresse/i.test(save.message) ? save.message : ""}
               onChange={(patch, coalesce) => change((draft) => ({ ...draft, ...patch }), coalesce ? `page:${coalesce}` : undefined)}
               onRevert={() => void action("revert", "Brouillon remis comme la version publiée")}

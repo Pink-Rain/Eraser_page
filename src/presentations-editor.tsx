@@ -7,7 +7,7 @@
  * sur les vraies lignes. Les onglets-fenêtres et les pages qui choisissent une de ces vues la
  * montrent avec ces réglages.
  */
-import { useMemo, useState, type ReactNode } from "react"
+import { useMemo, useRef, useState, type ReactNode } from "react"
 import { ArrowDown, ArrowUp, BookOpen, Maximize2, Bookmark, Check, Columns3, Gauge, Heading, Image as ImageIcon, LayoutGrid, LayoutList, ListTree, Monitor, MousePointerClick, Palette, Pencil, Plus, RotateCcw, Search, SearchX, Sigma, Smartphone, Sparkles, Star, Tablet, Users, X } from "lucide-react"
 
 import { IndexCard } from "@/components/eraser/index-card"
@@ -72,6 +72,24 @@ type Ctx = {
   disabled?: boolean
   /** De quoi faire un élément sur mesure (les colonnes typées, les lignes de l'aperçu, les cartes de l'onglet) ; absent : pas d'élément sur mesure. */
   element?: ElementSource
+  /** Ouvrir l'éditeur de l'élément sur mesure (le moteur des cartes), en grand. */
+  editElement: () => void
+}
+
+/**
+ * Un morceau de l'aperçu, cliqué : ses réglages s'ouvrent. Les morceaux sont repérés par
+ * l'affichage d'Eraser (`data-eraser-part`, `data-row-key`) ; « fond » : ailleurs dans la vue.
+ */
+export type PreviewPart = "vue-en-tete" | "vue-outils" | "vue-section" | "vue-pied" | "element" | "fond"
+export const previewPartLabels: Record<PreviewPart, string> = { "vue-en-tete": "l’en-tête", "vue-outils": "la barre d’outils", "vue-section": "une section", "vue-pied": "le pied", element: "un élément", fond: "le dessin de la vue" }
+/** La page de réglages de chaque morceau : la première de la liste qui existe pour la forme. */
+const partPages: Record<PreviewPart, string[]> = {
+  "vue-en-tete": ["general"],
+  "vue-outils": ["general"],
+  "vue-pied": ["general"],
+  "vue-section": ["arrange", "sections", "tree", "toc", "time", "dates", "tiles"],
+  element: ["items", "entries", "nodes", "sheets", "images", "captions", "tiles"],
+  fond: ["look"],
 }
 
 /** Ce qu'il faut à l'élément sur mesure d'une vue : les colonnes typées, quelques lignes, les cartes de l'onglet (pour partir d'elles). */
@@ -519,9 +537,8 @@ function SortSettings({ ctx }: { ctx: Ctx }) {
 
 /** L'élément : chaque ligne dessinée avec les réglages de la vue, une carte de « Modifier › Cartes », ou un formulaire de l'onglet en lecture ; puis « Au clic ». */
 function CardChoice({ ctx, withClick = true }: { ctx: Ctx; withClick?: boolean }) {
-  const { layout, set, cards, forms, disabled, element } = ctx
+  const { layout, set, cards, forms, disabled, element, editElement } = ctx
   const [picking, setPicking] = useState(false)
-  const [editing, setEditing] = useState(false)
   const own = layout.itemCard === PRESENTATION_ITEM_CARD
   const value = layout.itemForm ? `form:${layout.itemForm}` : layout.itemCard ?? ""
   const kindLabel = presentationKinds.find((entry) => entry.value === ctx.kind)?.label ?? ""
@@ -545,11 +562,11 @@ function CardChoice({ ctx, withClick = true }: { ctx: Ctx; withClick?: boolean }
         </NativeSelect>
       </label>
       {own && layout.itemTemplate && element && <div className="flex flex-wrap gap-1.5">
-        <Button type="button" size="sm" className="h-8" disabled={disabled} onClick={() => setEditing(true)}><Pencil />Modifier l’élément</Button>
+        <Button type="button" size="sm" className="h-8" disabled={disabled} onClick={editElement}><Pencil />Modifier l’élément</Button>
         <Button type="button" size="sm" variant="outline" className="h-8" disabled={disabled} onClick={() => setPicking(true)}><Sparkles />Repartir d’une forme…</Button>
       </div>}
       {/* L'élément simple devient une carte, réglable comme les cartes ; ses réglages d'avant restent : revenir à « Avec les réglages de cette vue » les retrouve. */}
-      {!value && element && <Button type="button" size="sm" variant="outline" className="h-8 justify-self-start" disabled={disabled} onClick={() => { set({ itemCard: PRESENTATION_ITEM_CARD, itemTemplate: elementFromSettings(layout, element.columns, kindLabel), itemForm: undefined }); setEditing(true) }} title="Une carte faite des réglages actuels (nom, colonnes, icône, image, pastille), à retoucher comme dans « Modifier › Cartes »"><Sparkles />En faire une carte, réglable comme les cartes</Button>}
+      {!value && element && <Button type="button" size="sm" variant="outline" className="h-8 justify-self-start" disabled={disabled} onClick={() => { set({ itemCard: PRESENTATION_ITEM_CARD, itemTemplate: elementFromSettings(layout, element.columns, kindLabel), itemForm: undefined }); editElement() }} title="Une carte faite des réglages actuels (nom, colonnes, icône, image, pastille), à retoucher comme dans « Modifier › Cartes »"><Sparkles />En faire une carte, réglable comme les cartes</Button>}
       <p className={hintText}>{own ? "Fait avec le moteur des cartes : taille, image, couleurs, blocs (titre, pastilles, libellé : valeur, jauge ou charges, tuiles, détails…), composition. Gardé dans cette vue, qui le pose à sa taille." : layout.itemForm ? "Le formulaire se règle dans « Modifier › Formulaire » : sections, onglets, blocs. Ici il se lit, le clic ouvre la fiche." : layout.itemCard ? "La carte se dessine dans « Modifier › Cartes » : image, couleurs, blocs, composition. Une carte changée là change aussi ici." : element ? "Les réglages ci-dessous dessinent l’élément. « En faire une carte » le refait avec le moteur des cartes ; ces réglages restent gardés : revenir ici les retrouve." : "Pour régler l’élément aussi finement qu’une carte : « Un élément propre à cette vue »."}</p>
     </div>
     {withClick && <ClickSettings ctx={ctx} />}
@@ -560,19 +577,9 @@ function CardChoice({ ctx, withClick = true }: { ctx: Ctx; withClick?: boolean }
       builtins={element.tabCards}
       builtinsLabel="Les cartes de cet onglet"
       builtinsHint="Une copie, à retoucher pour cette vue seulement."
-      onPick={(card) => { set({ itemCard: PRESENTATION_ITEM_CARD, itemTemplate: { ...card, name: `Élément · ${kindLabel}` }, itemForm: undefined }); setPicking(false); setEditing(true) }}
+      onPick={(card) => { set({ itemCard: PRESENTATION_ITEM_CARD, itemTemplate: { ...card, name: `Élément · ${kindLabel}` }, itemForm: undefined }); setPicking(false); editElement() }}
       onClose={() => setPicking(false)}
     />}
-    {editing && element && layout.itemTemplate && <Dialog open onOpenChange={(open) => { if (!open) setEditing(false) }}>
-      <DialogContent className="flex h-[92svh] max-h-[92svh] flex-col gap-3 sm:max-w-[min(96vw,1360px)]">
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="font-display text-2xl">Élément de la vue {kindLabel}</DialogTitle>
-          <DialogDescription>Chaque ligne de la vue se dessine ainsi : la carte, son image, ses blocs, sa composition. L’aperçu, à droite, montre les lignes de l’onglet. Rien n’est écrit avant « Enregistrer ».</DialogDescription>
-        </DialogHeader>
-        <div className="min-h-0 flex-1 overflow-y-auto lg:overflow-hidden"><SingleCardEditor card={layout.itemTemplate} columns={element.columns} samples={element.samples} onChange={(itemTemplate) => set({ itemTemplate })} disabled={disabled} /></div>
-        <div className="flex shrink-0 justify-end"><Button type="button" onClick={() => setEditing(false)}><Check />Terminé</Button></div>
-      </DialogContent>
-    </Dialog>}
   </>
 }
 
@@ -1249,7 +1256,7 @@ function CodexPages(ctx: Ctx): Page[] {
 type Page = { key: string; label: string; icon: ReactNode; render: () => ReactNode }
 
 /** Les réglages d'une vue (sa forme déjà choisie), en pages propres à son type. */
-export function PresentationKindSettings({ kind, layout, columns, onChange, cards = [], forms = [], hovers = [], stats = [], presentations = {}, optionsOf, disabled = false, element }: {
+export function PresentationKindSettings({ kind, layout, columns, onChange, cards = [], forms = [], hovers = [], stats = [], presentations = {}, optionsOf, disabled = false, element, focus }: {
   kind: PresentationKind
   layout: Presentation
   columns: string[]
@@ -1264,10 +1271,14 @@ export function PresentationKindSettings({ kind, layout, columns, onChange, card
   presentations?: TabPresentations
   optionsOf?: (header: string) => Array<{ value: string; color?: string }>
   disabled?: boolean
-  /** De quoi faire un élément sur mesure ; absent (bloc de page) : seulement les éléments existants. */
+  /** De quoi faire un élément sur mesure ; absent : seulement les éléments existants. */
   element?: ElementSource
+  /** Le morceau de l'aperçu qu'on vient de cliquer (`at` : quand) : ses réglages s'ouvrent. */
+  focus?: { part: PreviewPart; at: number }
 }) {
   const [page, setPage] = useState("")
+  const [elementEditing, setElementEditing] = useState(false)
+  const [seenFocus, setSeenFocus] = useState(0)
   const calendars = useCalendarNames(kind === "calendar" || kind === "timeline")
   const look = layout.look ?? {}
   const set = (changes: Partial<Presentation>) => {
@@ -1280,7 +1291,7 @@ export function PresentationKindSettings({ kind, layout, columns, onChange, card
     for (const key of Object.keys(next) as Array<keyof PresentationLook>) if (next[key] === undefined) delete next[key]
     set({ look: Object.keys(next).length ? next : undefined })
   }
-  const ctx: Ctx = { kind, layout, columns, set, setLook, look, cards, forms, hovers, stats, presentations, optionsOf, disabled, element }
+  const ctx: Ctx = { kind, layout, columns, set, setLook, look, cards, forms, hovers, stats, presentations, optionsOf, disabled, element, editElement: () => setElementEditing(true) }
   const pages = LIST_FAMILY.includes(kind) ? ListFamilyPages(ctx)
     : kind === "calendar" ? CalendarPages(ctx, calendars)
     : kind === "dashboard" ? DashboardPages(ctx)
@@ -1288,10 +1299,28 @@ export function PresentationKindSettings({ kind, layout, columns, onChange, card
     : kind === "timeline" ? TimelinePages(ctx, calendars)
     : kind === "tree" ? TreePages(ctx)
     : CodexPages(ctx)
+  // Un morceau cliqué dans l'aperçu : sa page de réglages ; un élément sur mesure s'ouvre dans l'éditeur des cartes.
+  if (focus && focus.at !== seenFocus) {
+    setSeenFocus(focus.at)
+    const wanted = pages.find((entry) => partPages[focus.part].includes(entry.key))
+    if (wanted) setPage(wanted.key)
+    if (focus.part === "element" && layout.itemCard === PRESENTATION_ITEM_CARD && layout.itemTemplate && !layout.itemForm && element) setElementEditing(true)
+  }
   const current = pages.find((entry) => entry.key === page) ?? pages[0]
+  const kindLabel = presentationKinds.find((entry) => entry.value === kind)?.label ?? ""
   return <div className="grid content-start gap-3">
     <Tabs ariaLabel="Réglages de la vue" value={current.key} options={pages.map((entry) => ({ value: entry.key, label: entry.label, icon: entry.icon }))} onChange={setPage} />
     {current.render()}
+    {elementEditing && element && layout.itemTemplate && <Dialog open onOpenChange={(open) => { if (!open) setElementEditing(false) }}>
+      <DialogContent className="flex h-[92svh] max-h-[92svh] flex-col gap-3 sm:max-w-[min(96vw,1360px)]">
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="font-display text-2xl">Élément de la vue {kindLabel}</DialogTitle>
+          <DialogDescription>Chaque ligne de la vue se dessine ainsi : la carte, son image, ses blocs, sa composition. L’aperçu, à droite, montre les lignes de l’onglet. Rien n’est écrit avant d’avoir enregistré (ou appliqué à la page).</DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto lg:overflow-hidden"><SingleCardEditor card={layout.itemTemplate} columns={element.columns} samples={element.samples} onChange={(itemTemplate) => set({ itemTemplate })} disabled={disabled} /></div>
+        <div className="flex shrink-0 justify-end"><Button type="button" onClick={() => setElementEditing(false)}><Check />Terminé</Button></div>
+      </DialogContent>
+    </Dialog>}
   </div>
 }
 
@@ -1502,6 +1531,42 @@ export function PresentationsPanel({ kind: viewKind, family, tabName, columns, v
 // L'éditeur : les réglages et l'aperçu
 // ---------------------------------------------------------------------------
 
+/**
+ * L'aperçu d'une vue dont chaque morceau se clique, comme la carte dans son atelier : l'en-tête, la
+ * barre d'outils, une section, un élément, le pied (repérés par l'affichage d'Eraser) ; ailleurs, le
+ * dessin de la vue. Le morceau survolé est entouré de tirets, le morceau choisi d'un trait. Rien de
+ * ce qu'on clique ici n'agit (aucun lien, aucun repli).
+ */
+export function PartsPreview({ onPart, children, className }: { onPart: (part: PreviewPart, at: number) => void; children: ReactNode; className?: string }) {
+  const box = useRef<HTMLDivElement>(null)
+  const hovered = useRef<Element | null>(null)
+  const chosen = useRef<Element | null>(null)
+  const partOf = (target: EventTarget | null) => {
+    const hit = target instanceof Element ? target.closest("[data-row-key], [data-eraser-part^='vue-']") : null
+    return hit && box.current?.contains(hit) ? hit : null
+  }
+  // Le repère est posé sur le morceau lui-même : le dessin d'Eraser ne bouge pas.
+  const mark = (slot: { current: Element | null }, next: Element | null, value: "survol" | "choisi") => {
+    if (slot.current === next) return
+    if (slot.current?.getAttribute("data-atelier") === value) slot.current.removeAttribute("data-atelier")
+    slot.current = next
+    if (next && !(value === "survol" && next.getAttribute("data-atelier") === "choisi")) next.setAttribute("data-atelier", value)
+  }
+  return <div
+    ref={box}
+    onClickCapture={(event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      const hit = partOf(event.target)
+      mark(chosen, hit, "choisi")
+      onPart(!hit ? "fond" : hit.hasAttribute("data-row-key") ? "element" : (hit.getAttribute("data-eraser-part") as PreviewPart), Date.now())
+    }}
+    onMouseOver={(event) => mark(hovered, partOf(event.target), "survol")}
+    onMouseLeave={() => mark(hovered, null, "survol")}
+    className={cn("cursor-pointer [&_[data-atelier]]:rounded-md [&_[data-atelier]]:outline-offset-[-2px] [&_[data-atelier=survol]]:outline-2 [&_[data-atelier=survol]]:outline-dashed [&_[data-atelier=survol]]:outline-primary/50 [&_[data-atelier=choisi]]:outline-2 [&_[data-atelier=choisi]]:outline-solid [&_[data-atelier=choisi]]:outline-primary", className)}
+  >{children}</div>
+}
+
 const screens = { phone: "24rem", tablet: "44rem", desktop: "100%" } as const
 const screenOptions: Array<{ value: keyof typeof screens; label: string; icon: ReactNode; title: string }> = [{ value: "phone", label: "", icon: <Smartphone className="size-3.5" />, title: "Téléphone" }, { value: "tablet", label: "", icon: <Tablet className="size-3.5" />, title: "Tablette" }, { value: "desktop", label: "", icon: <Monitor className="size-3.5" />, title: "Toute la largeur" }]
 
@@ -1531,6 +1596,8 @@ export function IndexPresentationsEditor({ kind, versionId = MAIN_PRESENTATION_I
 }) {
   const [screen, setScreen] = useState<keyof typeof screens>("desktop")
   const [starting, setStarting] = useState(false)
+  // Le morceau de l'aperçu qu'on a cliqué : ses réglages s'ouvrent à gauche.
+  const [focus, setFocus] = useState<{ part: PreviewPart; at: number } | undefined>(undefined)
   const [expanded, setExpanded] = useState(false)
   const [bigScreen, setBigScreen] = useState<keyof typeof screens>("desktop")
   const layout: Presentation = presentationVersionOf(value, kind, versionId)
@@ -1585,20 +1652,21 @@ export function IndexPresentationsEditor({ kind, versionId = MAIN_PRESENTATION_I
     presentations={value}
     empty="Pas encore de ligne dans cet onglet."
   />
-  // Deux volets, comme l'atelier des cartes : les réglages à gauche (assez larges pour en poser
-  // plusieurs par ligne), l'aperçu à droite ; « ⤢ » l'ouvre en grand. Chacun a sa barre de défilement.
-  return <div className="grid min-h-0 gap-3 lg:h-full lg:grid-cols-[minmax(0,1fr)_minmax(20rem,30rem)] xl:grid-cols-[minmax(0,1fr)_minmax(22rem,34rem)]">
+  // Deux volets, comme l'atelier des cartes : les réglages à gauche, l'aperçu en grand à droite, où
+  // chaque morceau se clique (ses réglages s'ouvrent) ; « ⤢ » l'ouvre plus grand encore. Chacun a sa barre de défilement.
+  return <div className="grid min-h-0 gap-3 lg:h-full lg:grid-cols-[minmax(20rem,28rem)_minmax(0,1fr)] xl:grid-cols-[minmax(22rem,32rem)_minmax(0,1fr)]">
     <div className="grid content-start gap-2 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
       <div className="flex justify-end"><Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" disabled={disabled} onClick={() => setStarting(true)} title="Repartir d’une forme de base, remplie avec les colonnes de cet onglet et dessinée sur ses lignes"><Sparkles className="size-3.5" />Forme de base</Button></div>
-      <PresentationKindSettings kind={kind} layout={layout} columns={columns} onChange={setLayout} element={cardColumns.length ? { columns: cardColumns, samples: rows, tabCards: cards } : undefined} cards={cards.map((card) => ({ id: card.id, name: card.name }))} forms={forms.map((form) => ({ id: form.id, name: form.name }))} hovers={hovers} stats={stats.map((stat) => ({ id: stat.id, title: stat.title }))} presentations={value} optionsOf={optionsOf} disabled={disabled} />
+      <PresentationKindSettings kind={kind} layout={layout} columns={columns} onChange={setLayout} element={cardColumns.length ? { columns: cardColumns, samples: rows, tabCards: cards } : undefined} cards={cards.map((card) => ({ id: card.id, name: card.name }))} forms={forms.map((form) => ({ id: form.id, name: form.name }))} hovers={hovers} stats={stats.map((stat) => ({ id: stat.id, title: stat.title }))} presentations={value} optionsOf={optionsOf} disabled={disabled} focus={focus} />
     </div>
     <section className="min-w-0 rounded-xl border bg-muted/20 p-3 lg:min-h-0 lg:overflow-auto" aria-label="Aperçu">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1"><p className="text-[11px] font-semibold uppercase tracking-[.14em] text-muted-foreground">Aperçu · {kindLabel} · {rows.length} ligne{rows.length > 1 ? "s" : ""} de « {tabName} »</p><PreviewExpandButton onClick={() => setExpanded(true)} /></span>
         <Segmented ariaLabel="Largeur d’écran simulée" value={screen} options={screenOptions} onChange={setScreen} />
       </div>
+      <p className="mb-2 text-[11px] text-muted-foreground">{focus ? <>Choisi : <b className="text-foreground">{previewPartLabels[focus.part]}</b> · ses réglages sont ouverts à gauche.</> : "Clique un morceau de l’aperçu (l’en-tête, une section, un élément, la barre d’outils, le pied) : ses réglages s’ouvrent à gauche."}</p>
       <div className={cn("overflow-auto rounded-lg", screen !== "desktop" && "mx-auto border bg-background/60 p-2")} style={{ maxWidth: screens[screen] }}>
-        {preview(layout)}
+        <PartsPreview onPart={(part, at) => setFocus({ part, at })}>{preview(layout)}</PartsPreview>
       </div>
     </section>
     {expanded && <PreviewDialog

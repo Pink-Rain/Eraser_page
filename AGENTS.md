@@ -31,6 +31,18 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
   qu'Eraser ne prête pas encore s'ajoute là-bas (jamais un module qui tire du code serveur ; on
   n'importe d'un tel module que des types).
 - Un nouveau type de bloc touche les deux dépôts : l'affichage dans Eraser, l'édition ici.
+- **L'apparence d'un bloc se règle depuis la page** (choix du propriétaire : l'index n'est qu'un
+  raccourci et une réserve de presets). `src/block-appearance.tsx` : « Modifier l'apparence » d'un
+  bloc Vue, en grand ; une seule rangée de formes (`src/block-forms.ts` : tableau, cartes, chaque
+  présentation) ; les cartes dans l'éditeur des cartes (carte propre au bloc, `card`) ; les
+  présentations dans `IndexPresentationsEditor`, dont l'aperçu se clique morceau par morceau
+  (`PartsPreview` : en-tête, barre d'outils, section, élément, pied → leur page de réglages ; un
+  élément en carte sur mesure ouvre l'éditeur des cartes). L'élément suit d'une forme à l'autre ; une
+  forme neuve part de celle de l'onglet, sinon de sa première forme de départ. « Partir de… » et
+  « Enregistrer en preset » sont les seuls liens avec l'index. L'aperçu lit les lignes du bloc
+  (`/api/pages/block-data`, réglages du bloc).
+- `src/row-form-studio.tsx` : « Valeurs de la ligne » comme une fiche, disposées depuis la page avec
+  l'éditeur des formulaires (disposition propre au bloc, `form`).
 - **Fiches-pages** (`src/fiche-pages.ts`, `src/fiche-page-ui.tsx`) : la page de chaque ligne d'un
   index (`rowOf` d'une page, affichée par Eraser à `/fiche/<index>/<ID>`). « Nouvelle fiche-page »
   (Index des pages) la crée avec une page de départ ; l'atelier la dessine sur une ligne d'exemple

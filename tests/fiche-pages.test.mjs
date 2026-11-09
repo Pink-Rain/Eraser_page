@@ -54,6 +54,11 @@ test("Fiche-page : la ligne d'exemple remplit « {Colonne} » comme la vraie pag
   assert.equal(row.name, "Elfes");
   assert.equal(row.columns.find((column) => column.header === "Description").html, "Peuple <b>ancien</b>");
   assert.equal(fiche.ficheRowContext({ index: "peoples", indexTitle: "", tab: "Peuples", headers, rows: data, id: "nains", nameHeader: "Nom" }, sanitize), null);
+  // Comme la vraie page : ni l'identifiant, ni une colonne masquée (son « {…} » s'efface).
+  assert.deepEqual(row.columns.map((column) => column.header), ["Nom", "Description"]);
+  const masked = fiche.ficheRowContext({ index: "peoples", indexTitle: "", tab: "Peuples", headers, rows: data, id: "elfes", nameHeader: "Nom", specOf: (header) => header === "Description" ? { kind: "rich", hidden: true } : undefined }, sanitize);
+  assert.deepEqual(masked.columns.map((column) => column.header), ["Nom"]);
+  assert.deepEqual(masked.hidden, ["Description"]);
   const view = { id: "p", title: "Fiche", icon: "", emoji: "", description: "", sections: [{ id: "s", layout: "1", framed: false, cols: [[{ id: "b", vis: "tous", type: "title", eyebrow: "Peuple", text: "{Nom}", level: "h2", align: "left" }]] }] };
   const filled = rows.fillRowPage(view, row);
   assert.equal(filled.sections[0].cols[0][0].text, "Elfes");

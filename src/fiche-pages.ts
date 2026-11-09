@@ -8,7 +8,7 @@
  */
 import { newBlock, newId, type PageBlock, type PageContent, type PageSectionBlock } from "@/lib/custom-pages"
 import type { RowContext } from "@/lib/custom-pages-rows"
-import { foldName, isIdHeader } from "@/lib/index-columns"
+import { foldName, isComputedSpec, isIdHeader } from "@/lib/index-columns"
 import type { IndexColumnSpec } from "@/lib/index-columns"
 
 /** Une colonne d'un onglet, avec son type (celui que l'index lui donne). */
@@ -78,19 +78,22 @@ export function ficheExamples(headers: string[], rows: FicheRow[], nameHeader: s
  * administrateur : toutes les colonnes) ; `sanitize` nettoie le texte riche avant l'affichage.
  * `null` si la ligne n'existe pas.
  */
-export function ficheRowContext(input: { index: string; indexTitle: string; tab: string; headers: string[]; rows: FicheRow[]; id: string; nameHeader: string }, sanitize: (html: string) => string): RowContext | null {
+export function ficheRowContext(input: { index: string; indexTitle: string; tab: string; headers: string[]; rows: FicheRow[]; id: string; nameHeader: string; specOf?: (header: string) => IndexColumnSpec | undefined }, sanitize: (html: string) => string): RowContext | null {
   const idAt = input.headers.findIndex(isIdHeader)
   if (idAt < 0) return null
   const row = input.rows.find((candidate) => plain(candidate.values[idAt] ?? "") === input.id)
   if (!row) return null
+  // Comme la vraie page (shownColumns) : ni l'identifiant, ni une colonne masquée, archivée ou calculée.
+  const shown = (header: string) => { if (!header.trim() || isIdHeader(header)) return false; const spec = input.specOf?.(header); return !spec || !(spec.hidden || spec.kind === "archived" || isComputedSpec(spec)) }
   const columns = input.headers.flatMap((header, at) => {
-    if (!header.trim()) return []
+    if (!shown(header)) return []
     const html = row.html[at] ?? ""
     const value = row.values[at] ?? ""
     return [{ header, text: plain(value || html), html: sanitize(html || escapeHtml(value)) }]
   })
   const name = columns.find((column) => foldName(column.header) === foldName(input.nameHeader))?.text ?? ""
-  return { index: input.index, indexTitle: input.indexTitle, tab: input.tab, id: input.id, name: name || input.id, columns, hidden: [] }
+  const hidden = input.headers.filter((header) => header.trim() && !isIdHeader(header) && !shown(header))
+  return { index: input.index, indexTitle: input.indexTitle, tab: input.tab, id: input.id, name: name || input.id, columns, hidden }
 }
 
 /** La ligne d'exemple choisie pour une fiche-page, gardée sur cet ordinateur. */

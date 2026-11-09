@@ -44,7 +44,7 @@ function loadIndex(key: string) {
 }
 
 /** L'index (ses onglets, leurs colonnes et leurs lignes) d'une fiche-page. */
-function useIndexData(key: string) {
+export function useIndexData(key: string) {
   const [state, setState] = useState<{ key: string; data: WorldIndexData | null; error: string }>({ key, data: null, error: "" })
   useEffect(() => {
     if (!key) return
@@ -199,7 +199,8 @@ export function useFicheExample(pageId: string, rowOf: { index: string; tab?: st
     if (!data || !example) return null
     const table = tablesOf(data, example.tab)[0]
     if (!table) return null
-    const context = ficheRowContext({ index: key, indexTitle: data.definition.title, tab: table.tabName, headers: table.headers, rows: table.rows, id: example.id, nameHeader: nameHeaderOf(data, table.tabName) }, sanitizeRichText)
+    const specs = new Map((data.columns[table.tabName] ?? []).map((column) => [foldName(column.header), column.spec]))
+    const context = ficheRowContext({ index: key, indexTitle: data.definition.title, tab: table.tabName, headers: table.headers, rows: table.rows, id: example.id, nameHeader: nameHeaderOf(data, table.tabName), specOf: (header) => specs.get(foldName(header)) }, sanitizeRichText)
     if (!context) return null
     const form = tabLayoutOrBuiltin(layouts, key, table.tabName, "form")
     const forms: Record<string, IndexLayout> = {}

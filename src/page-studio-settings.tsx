@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react"
-import { Check, ChevronDown, Copy, ExternalLink, LoaderCircle, Plus, RefreshCw, TriangleAlert, X } from "lucide-react"
+import { Check, ChevronDown, Copy, ExternalLink, LoaderCircle, Palette, Plus, RefreshCw, TriangleAlert, X } from "lucide-react"
 
 import { IconPicker } from "@/components/eraser/index-gauge"
 import { Range } from "@/components/eraser/editor-controls"
 import { PageIcon, calloutTones, formatWhen } from "@/components/eraser/custom-page-view"
 import { blockIcons } from "./page-studio-icons"
-import { PresentationKindSettings } from "./presentations-editor"
+import { blockForm } from "./block-forms"
+import { RowFormStudio } from "./row-form-studio"
 import { useIndexSettings } from "@/components/eraser/index-windows"
 import { linkedBlockFields, newSavedViewId, savedViewFromBlock, type SavedView } from "@/lib/index-saved-views"
-import { builtinPresentationPresets, isPresentationKind, namedPresentationsOf, presentationClicks, PRESENTATION_VARIANT_PREFIX, type Presentation, type PresentationClick } from "@/lib/index-presentations"
+import { isPresentationKind, presentationClicks, PRESENTATION_VARIANT_PREFIX, type Presentation, type PresentationClick } from "@/lib/index-presentations"
 import { foldName } from "@/lib/index-columns"
 import { ALL_PINNED_STATS } from "@/lib/custom-pages-data"
 import { eraserModules, moduleSections } from "@/lib/eraser-modules"
@@ -273,42 +274,27 @@ function SavedViewChoice({ block, tabs, onChange }: { block: ViewBlockSettings; 
   </>
 }
 
-function ViewSettings({ block, rowOf, pages, onChange }: { block: Extract<PageBlock, { type: "view" }>; rowOf?: { index: string; tab?: string }; pages: PageSummary[]; onChange: (patch: Partial<Extract<PageBlock, { type: "view" }>>) => void }) {
+function ViewSettings({ block, rowOf, pages, onChange, onAppearance }: { block: Extract<PageBlock, { type: "view" }>; rowOf?: { index: string; tab?: string }; pages: PageSummary[]; onChange: (patch: Partial<Extract<PageBlock, { type: "view" }>>) => void; /** Ouvrir l'éditeur de l'apparence du bloc, en grand. */ onAppearance?: () => void }) {
   const { details, loading, reload } = useIndexDetails(block.index)
   const indexSettings = useIndexSettings(block.index)
   const catalog = useIndexCatalog()
   const tab = details?.tabs.find((item) => item.name === block.tab)
-  const configured = tab?.configured ?? []
   const presentation = isPresentationKind(block.kind)
   const kindLabel = viewBlockKinds.find((item) => item.value === block.kind)?.label ?? ""
-  const presets = (details?.presets ?? []).filter((preset) => preset.kind === block.kind)
   const variants = (tab?.viewList ?? []).filter((item) => item.kind === block.kind)
   const columns = tab?.columns ?? []
-  // La forme propre part de celle de l'onglet (sinon de la forme par défaut) : rien n'est perdu à basculer.
-  const startFrom = (kind: ViewBlockKind): Presentation => ({ ...(tab?.forms?.[kind] ?? {}), kind })
-  // Changer de présentation : un preset ou une forme propre ne passe pas d'une présentation à l'autre.
-  const pickKind = (kind: ViewBlockKind) => onChange({ kind, layout: block.layout && isPresentationKind(kind) ? startFrom(kind) : undefined, presetId: undefined })
-  const form = block.layout ? "own" : block.presetId ? `preset:${block.presetId}` : ""
-  const pickForm = (value: string) => value === "own" ? onChange({ layout: startFrom(block.kind), presetId: undefined })
-    : value.startsWith("preset:") ? onChange({ presetId: value.slice("preset:".length), layout: undefined })
-    : onChange({ presetId: undefined, layout: undefined })
   const where = block.where
   // Un bloc qui montre une vue de l'index : la vue règle l'onglet, la forme, le filtre, le tri et le clic.
   const linked = Boolean(block.savedViewId)
   // La forme que montre le bloc (propre à la page, une version de l'onglet, un preset, sinon celle de l'onglet) :
   // choisir son « Au clic » ici en fait une forme propre à cette page, partie de celle-là.
-  const shownForm = (): Presentation => {
-    if (block.layout) return block.layout
-    if (block.presetId?.startsWith(PRESENTATION_VARIANT_PREFIX)) {
-      const tabViews = Object.entries(indexSettings.presentations).find(([name]) => foldName(name) === foldName(block.tab))?.[1]
-      const version = namedPresentationsOf(tabViews).find((item) => item.id === block.presetId!.slice(PRESENTATION_VARIANT_PREFIX.length))
-      if (version) return version.layout
-    } else if (block.presetId) {
-      const preset = [...builtinPresentationPresets, ...indexSettings.viewPresets].find((item) => item.id === block.presetId)
-      if (preset) return preset.layout
-    }
-    return startFrom(block.kind)
-  }
+  const shownForm = (): Presentation => blockForm(block, { presentations: indexSettings.presentations, viewPresets: indexSettings.viewPresets, tabForm: tab?.forms?.[block.kind] })
+  // Ce que montre le bloc, en mots : sa forme et d'où elle vient.
+  const variantName = block.presetId?.startsWith(PRESENTATION_VARIANT_PREFIX) ? variants.find((item) => `${PRESENTATION_VARIANT_PREFIX}${item.id}` === block.presetId)?.name : undefined
+  const presetName = block.presetId && !variantName ? (details?.presets ?? []).find((preset) => preset.id === block.presetId)?.name : undefined
+  const appearanceSource = block.kind === "table" ? "les colonnes de l’onglet"
+    : block.kind === "cards" ? block.card ? `la carte « ${block.card.name} », propre à cette page` : block.cardId ? `la carte « ${tab?.cardList?.find((card) => card.id === block.cardId)?.name ?? "retirée"} » de l’index` : "la carte à l’étoile de l’onglet"
+      : block.layout ? "propre à cette page" : variantName ? `la version « ${variantName} » de l’index` : presetName ? `le preset « ${presetName} »` : "celle de l’onglet"
   const ownClick = block.layout?.click ?? ""
   const pickClick = (click: "" | PresentationClick) => {
     if (!click) { if (block.layout) onChange({ layout: { ...block.layout, click: undefined } }); return }
@@ -320,42 +306,20 @@ function ViewSettings({ block, rowOf, pages, onChange }: { block: Extract<PageBl
     ? <>« {indexTitle} » a sa fiche-page : « {fichePage.title} »{fichePage.status !== "publiee" ? " (brouillon : les joueurs ne l’ont qu’une fois publiée)" : ""}.</>
     : <>« {indexTitle} » n’a pas encore de fiche-page : crée-la dans l’Index des pages (« Nouvelle fiche-page »). D’ici là, la ligne ouvre la page qu’Eraser lui donne (une classe, un personnage…), sinon sa fiche.</>
   return <>
-    <IndexPicker value={block.index} onChange={(index) => onChange({ index, tab: "", viewId: undefined, savedViewId: undefined, layout: undefined, presetId: undefined, cardId: undefined, where: undefined, sort: undefined })} />
+    <IndexPicker value={block.index} onChange={(index) => onChange({ index, tab: "", viewId: undefined, savedViewId: undefined, layout: undefined, presetId: undefined, cardId: undefined, card: undefined, where: undefined, sort: undefined })} />
     {block.index && <SavedViewChoice block={block} tabs={(details?.tabs ?? []).map((item) => item.name)} onChange={onChange} />}
     {block.index && !linked && <Field label="Onglet">
-      <select className={fieldClass} value={block.tab} disabled={loading && !details} onChange={(event) => onChange({ tab: event.target.value, viewId: undefined, layout: undefined, cardId: undefined, where: undefined, sort: undefined })}>
+      <select className={fieldClass} value={block.tab} disabled={loading && !details} onChange={(event) => onChange({ tab: event.target.value, viewId: undefined, layout: undefined, cardId: undefined, card: undefined, where: undefined, sort: undefined })}>
         <option value="">{loading && !details ? "Lecture de l’index…" : "Choisir un onglet…"}</option>
         {(details?.tabs ?? []).map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
       </select>
     </Field>}
-    {block.tab && !linked && <Field label="Présentation" hint="Tout ce que propose « Modifier » dans l’index. Un point : déjà réglée pour cet onglet.">
-      <div className="flex flex-wrap gap-1">
-        {viewBlockKinds.map((kind) => {
-          const Icon = blockIcons.views[kind.value]
-          return <button key={kind.value} type="button" aria-pressed={block.kind === kind.value} onClick={() => pickKind(kind.value)} className="inline-flex items-center gap-1.5 rounded-full border border-border/80 bg-background/60 px-2.5 py-1 text-xs text-muted-foreground transition hover:border-border hover:text-foreground aria-pressed:border-foreground aria-pressed:bg-foreground aria-pressed:text-background">
-            <Icon className="size-3.5" />{kind.label}{(configured.includes(kind.value) || (kind.value === "cards" && tab?.cards)) && <span className="size-1.5 rounded-full bg-current opacity-70" aria-label="réglée dans l’index" />}
-          </button>
-        })}
+    {block.tab && !linked && <Field label="Apparence" hint="Tableau, cartes, liste, kanban, chronologie, galerie… : tout se règle en grand, sur les lignes de l’onglet, pour cette page.">
+      <div className="grid gap-2 rounded-xl border bg-background/50 p-2.5">
+        <span className="flex min-w-0 items-center gap-2 text-[13px]">{(() => { const Icon = blockIcons.views[block.kind]; return <Icon className="size-4 shrink-0 text-primary" /> })()}<b>{kindLabel}</b><span className="min-w-0 truncate text-muted-foreground">· {appearanceSource}</span></span>
+        {onAppearance && <button type="button" onClick={onAppearance} className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:bg-primary/90"><Palette className="size-3.5" />Modifier l’apparence</button>}
       </div>
     </Field>}
-    {block.tab && !linked && block.kind === "cards" && <Field label="Carte" hint={tab?.cardList?.length ? <>Les cartes de l’onglet (Modifier › Cartes). <RefreshLink onClick={reload} loading={loading} /></> : <>Cet onglet n’a pas encore de carte : Eraser en dessine une d’office. Crée les tiennes dans l’index (Modifier › Cartes). <RefreshLink onClick={reload} loading={loading} /></>}>
-      <select className={fieldClass} value={block.cardId ?? ""} onChange={(event) => onChange({ cardId: event.target.value || undefined })}>
-        <option value="">Celle à l’étoile (par défaut)</option>
-        {(tab?.cardList ?? []).map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}
-        {block.cardId && !(tab?.cardList ?? []).some((card) => card.id === block.cardId) && <option value={block.cardId}>Carte supprimée (celle par défaut la remplace)</option>}
-      </select>
-    </Field>}
-    {block.tab && !linked && presentation && <Field label="Forme" hint={<>Les versions de l’onglet (Modifier › {kindLabel} › Nouveau) et les presets apparaissent ici. <RefreshLink onClick={reload} loading={loading} /></>}>
-      <select className={fieldClass} value={form} onChange={(event) => pickForm(event.target.value)}>
-        <option value="">{configured.includes(block.kind) ? `Celle à l’étoile de l’onglet (Modifier › ${kindLabel})` : `Celle de l’onglet (${kindLabel} par défaut)`}</option>
-        {variants.length > 0 && <optgroup label="Les autres versions de l’onglet">{variants.map((item) => <option key={item.id} value={`preset:${PRESENTATION_VARIANT_PREFIX}${item.id}`}>{item.name}</option>)}</optgroup>}
-        {presets.some((preset) => !preset.builtin) && <optgroup label="Tes presets">{presets.filter((preset) => !preset.builtin).map((preset) => <option key={preset.id} value={`preset:${preset.id}`}>{preset.name}</option>)}</optgroup>}
-        {presets.some((preset) => preset.builtin) && <optgroup label="Presets d’Eraser">{presets.filter((preset) => preset.builtin).map((preset) => <option key={preset.id} value={`preset:${preset.id}`}>{preset.name}</option>)}</optgroup>}
-        {block.presetId && !presets.some((preset) => preset.id === block.presetId) && !variants.some((item) => `${PRESENTATION_VARIANT_PREFIX}${item.id}` === block.presetId) && details && <option value={`preset:${block.presetId}`}>{block.presetId.startsWith(PRESENTATION_VARIANT_PREFIX) ? "Version supprimée (celle à l’étoile la remplace)" : "Preset supprimé (la forme de l’onglet le remplace)"}</option>}
-        <option value="own">Propre à cette page…</option>
-      </select>
-    </Field>}
-    {block.tab && !linked && presentation && block.layout && isPresentationKind(block.kind) && <PresentationKindSettings kind={block.kind} layout={block.layout} columns={columns} cards={tab?.cardList ?? []} hovers={tab?.hoverList ?? []} onChange={(layout) => onChange({ layout: { ...layout, kind: block.kind } })} />}
     {block.tab && !linked && <Field label="Seulement les lignes où…" hint={`Sans condition : toutes les lignes. « {Moi} » : le lecteur (« Joueur est {Moi} » : ses personnages ; « MJ est {Moi} » : ses campagnes).${rowOf?.index ? " « {Colonne} » prend la valeur de la ligne de la page, aussi dans un nom de colonne." : " Les colonnes masquées comptent aussi, sans jamais être montrées."}`}>
       <WhereEditor where={where} columns={columns} choices={tab?.choices ?? {}} rowPage={Boolean(rowOf?.index)} onChange={(next) => onChange({ where: next })} />
     </Field>}
@@ -415,6 +379,7 @@ function RefreshLink({ onClick, loading }: { onClick: () => void; loading: boole
 /** Page de ligne : les colonnes montrées par « Valeurs de la ligne ». */
 function RowFieldsSettings({ block, rowOf, onChange }: { block: Extract<PageBlock, { type: "rowfields" }>; rowOf?: { index: string; tab?: string }; onChange: (patch: Partial<Extract<PageBlock, { type: "rowfields" }>>) => void }) {
   const { details, loading } = useIndexDetails(rowOf?.index ?? "")
+  const [disposing, setDisposing] = useState(false)
   const columns = [...new Set((details?.tabs ?? []).filter((tab) => !rowOf?.tab || tab.name === rowOf.tab).flatMap((tab) => tab.columns ?? []))]
   if (!rowOf?.index) return <Hint>Ce bloc sert sur une fiche-page : crée-la avec « Nouvelle fiche-page » (Index des pages), ou règle cette page (Réglages de la page › « Fiche-page d’un index »).</Hint>
   return <>
@@ -426,10 +391,17 @@ function RowFieldsSettings({ block, rowOf, onChange }: { block: Extract<PageBloc
         })}
       </div>}
     </Field>
-    <Field label="Disposition" hint={block.style === "form" ? "Les sections, les lignes, la colonne latérale et les blocs de la fiche de l’onglet (Modifier › Formulaire), en lecture." : undefined}><Segmented label="Disposition" value={block.style} onChange={(style) => onChange({ style })} options={[{ value: "grid", label: "En grille" }, { value: "list", label: "En liste" }, { value: "form", label: "Comme la fiche", title: "Disposées comme le formulaire de l’index" }]} /></Field>
-    {block.style === "form" && (() => {
+    <Field label="Disposition" hint={block.style === "form" ? "Comme une fiche : sections, lignes de champs, colonne de côté et blocs, en lecture." : undefined}><Segmented label="Disposition" value={block.style} onChange={(style) => onChange({ style })} options={[{ value: "grid", label: "En grille" }, { value: "list", label: "En liste" }, { value: "form", label: "Comme la fiche", title: "Disposées comme le formulaire de l’index" }]} /></Field>
+    {block.style === "form" && <Field label="La fiche" hint="Disposée ici, sur les lignes de l’index, pour cette page seulement.">
+      <div className="grid gap-2 rounded-xl border bg-background/50 p-2.5">
+        <span className="text-[13px]"><b>{block.form ? "Propre à cette page" : "Le formulaire de l’index"}</b></span>
+        <button type="button" onClick={() => setDisposing(true)} className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 text-[13px] font-medium text-primary-foreground transition hover:bg-primary/90"><Palette className="size-3.5" />Modifier la disposition</button>
+      </div>
+    </Field>}
+    {disposing && rowOf?.index && <RowFormStudio rowOf={rowOf} block={block} onApply={(form) => onChange({ form })} onClose={() => setDisposing(false)} />}
+    {block.style === "form" && !block.form && (() => {
       const forms = [...new Map((details?.tabs ?? []).filter((tab) => !rowOf?.tab || tab.name === rowOf.tab).flatMap((tab) => tab.formList ?? []).map((form) => [form.id, form])).values()]
-      return <Field label="Formulaire" hint="Lequel des formulaires de l’onglet (Modifier › Formulaire). Vide : le formulaire étoilé.">
+      return <Field label="Formulaire de l’index" hint="Lequel des formulaires de l’onglet. Vide : le formulaire étoilé. « Modifier la disposition » part de lui.">
         <select className={fieldClass} value={block.formId ?? ""} onChange={(event) => onChange({ formId: event.target.value || undefined })}>
           <option value="">Le formulaire étoilé</option>
           {forms.filter((form) => form.id !== "principal").map((form) => <option key={form.id} value={form.id}>{form.name}</option>)}
@@ -458,7 +430,7 @@ function StatSettings({ block, onChange }: { block: Extract<PageBlock, { type: "
 
 /* ---------- Réglages d'un bloc ---------- */
 
-export function BlockSettings({ block, pages, live, rowOf, onChange, onDuplicate, onRemove, onPage }: {
+export function BlockSettings({ block, pages, live, rowOf, onChange, onDuplicate, onRemove, onPage, onAppearance }: {
   block: PageBlock
   /** La page est le modèle des pages de ligne de cet index. */
   rowOf?: { index: string; tab?: string }
@@ -468,6 +440,8 @@ export function BlockSettings({ block, pages, live, rowOf, onChange, onDuplicate
   onDuplicate: () => void
   onRemove: () => void
   onPage: () => void
+  /** Bloc Vue : ouvrir l'éditeur de son apparence, en grand. */
+  onAppearance?: () => void
 }) {
   const entry = blockCatalog.find((item) => item.type === block.type)!
   const Icon = blockIcons.blocks[block.type]
@@ -554,7 +528,7 @@ export function BlockSettings({ block, pages, live, rowOf, onChange, onDuplicate
       </>
       break
     case "view":
-      content = <ViewSettings block={block} rowOf={rowOf} pages={pages} onChange={(patch) => set(patch)} />
+      content = <ViewSettings block={block} rowOf={rowOf} pages={pages} onChange={(patch) => set(patch)} onAppearance={onAppearance} />
       break
     case "rowfields":
       content = <RowFieldsSettings block={block} rowOf={rowOf} onChange={(patch) => set(patch)} />
