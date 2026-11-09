@@ -31,6 +31,11 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
   qu'Eraser ne prête pas encore s'ajoute là-bas (jamais un module qui tire du code serveur ; on
   n'importe d'un tel module que des types).
 - Un nouveau type de bloc touche les deux dépôts : l'affichage dans Eraser, l'édition ici.
+- **Fiches-pages** (`src/fiche-pages.ts`, `src/fiche-page-ui.tsx`) : la page de chaque ligne d'un
+  index (`rowOf` d'une page, affichée par Eraser à `/fiche/<index>/<ID>`). « Nouvelle fiche-page »
+  (Index des pages) la crée avec une page de départ ; l'atelier la dessine sur une ligne d'exemple
+  (gardée sur l'ordinateur) et l'aperçu la montre remplie comme sa vraie page. Un bloc Vue s'y relie
+  par « Au clic sur une ligne › Ouvrir sa fiche-page » (une forme propre à la page, clic `page`).
 - Ce qui charge encore porte `aria-busy="true"` (écran `Screen`, apparences) : le relevé de
   fluidité d'Eraser compte l'ouverture de l'extension, et le changement de page, jusqu'à ce qu'il
   n'y en ait plus. Un nouvel écran qui lit ses données fait de même.

@@ -8,6 +8,10 @@
  * tant qu'elle n'est pas publiée, les lecteurs voient la page d'origine, elle est donc
  * « Publiée », et « modifiée » dès qu'on l'a changée dans l'atelier.
  *
+ * Une fiche-page (la page de chaque ligne d'un index, `rowOf`) se lit par son index : « Fiche-page ·
+ * Peuples », à l'adresse de ses lignes (/fiche/<index>/…). Son adresse propre ne montre que le
+ * modèle, sans ligne : elle ne se visite pas telle quelle.
+ *
  * Règles pures : l'explorateur, l'éditeur du menu et les tests s'en servent.
  */
 import { placeLabel, type PageStatus, type PageSummary, type PageVisibility } from "@/lib/custom-pages"
@@ -51,7 +55,7 @@ export const visitablePath = (path: string) => !path.includes("[")
  * Toutes les pages de l'explorateur : celles de l'atelier (corbeille comprise) et les pages
  * d'Eraser qu'aucune page de l'atelier ne reprend encore.
  */
-export function explorerPages(pages: PageSummary[], eraser: EraserPageEntry[], campaignName: (id: string) => string = () => "Campagne"): ExplorerPage[] {
+export function explorerPages(pages: PageSummary[], eraser: EraserPageEntry[], campaignName: (id: string) => string = () => "Campagne", indexTitle: (key: string) => string = (key) => key): ExplorerPage[] {
   const out: ExplorerPage[] = []
   const taken = new Set<string>()
   for (const page of pages) {
@@ -61,9 +65,10 @@ export function explorerPages(pages: PageSummary[], eraser: EraserPageEntry[], c
     if (taken.has(key) && page.trashedAt) continue
     if (!page.trashedAt) taken.add(key)
     const replaced = Boolean(page.replaces)
+    const fiche = page.rowOf?.index ? `Fiche-page · ${indexTitle(page.rowOf.index)}${page.rowOf.tab ? ` › ${page.rowOf.tab}` : ""}` : ""
     // Jamais publiée, elle laisse voir la page d'Eraser : celle-ci reste publiée, « modifiée » si on l'a changée.
     const shadow = replaced && page.status !== "publiee"
-    const where = replaced
+    const where = fiche ? fiche : replaced
       ? `${route?.group ?? "Eraser"}${page.replaceMode === "before" ? ` · au-dessus de « ${replacementLabel(page.replaces!)} »` : page.replaceMode === "after" ? ` · en dessous de « ${replacementLabel(page.replaces!)} »` : ""}`
       : page.place === "campagne" ? `Campagne · ${campaignName(page.campaignId)}` : placeLabel(page.place)
     out.push({
@@ -74,10 +79,10 @@ export function explorerPages(pages: PageSummary[], eraser: EraserPageEntry[], c
       icon: page.icon || (route?.icon ?? ""),
       emoji: page.emoji,
       description: page.description,
-      href: replaced ? page.replaces! : page.href,
-      visitable: replaced ? visitablePath(page.replaces!) : true,
+      href: fiche ? `/fiche/${page.rowOf!.index}/…` : replaced ? page.replaces! : page.href,
+      visitable: fiche ? false : replaced ? visitablePath(page.replaces!) : true,
       where,
-      group: replaced ? route?.group ?? "Eraser" : page.place === "campagne" ? "Campagnes" : placeLabel(page.place),
+      group: fiche ? "Fiches-pages" : replaced ? route?.group ?? "Eraser" : page.place === "campagne" ? "Campagnes" : placeLabel(page.place),
       vis: page.vis,
       status: shadow ? "publiee" : page.status,
       unpublished: shadow ? page.updatedAt !== page.createdAt : page.unpublished,

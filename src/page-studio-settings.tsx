@@ -8,7 +8,8 @@ import { blockIcons } from "./page-studio-icons"
 import { PresentationKindSettings } from "./presentations-editor"
 import { useIndexSettings } from "@/components/eraser/index-windows"
 import { linkedBlockFields, newSavedViewId, savedViewFromBlock, type SavedView } from "@/lib/index-saved-views"
-import { isPresentationKind, PRESENTATION_VARIANT_PREFIX, type Presentation } from "@/lib/index-presentations"
+import { builtinPresentationPresets, isPresentationKind, namedPresentationsOf, presentationClicks, PRESENTATION_VARIANT_PREFIX, type Presentation, type PresentationClick } from "@/lib/index-presentations"
+import { foldName } from "@/lib/index-columns"
 import { ALL_PINNED_STATS } from "@/lib/custom-pages-data"
 import { eraserModules, moduleSections } from "@/lib/eraser-modules"
 import { ALL_SOURCES, describeCondition, filterOperators, type FilterCondition } from "@/lib/index-windows"
@@ -125,13 +126,13 @@ function loadDetails(key: string) {
   return promise
 }
 
-function useIndexCatalog() {
+export function useIndexCatalog() {
   const [indexes, setIndexes] = useState<IndexEntry[] | null>(null)
   useEffect(() => { let alive = true; void loadCatalog().then((list) => { if (alive) setIndexes(list) }); return () => { alive = false } }, [])
   return indexes
 }
 
-function useIndexDetails(key: string) {
+export function useIndexDetails(key: string) {
   const [state, setState] = useState<{ key: string; details: IndexDetails | null; loading: boolean }>({ key, details: null, loading: Boolean(key) })
   const [version, setVersion] = useState(0)
   useEffect(() => {
@@ -147,9 +148,9 @@ function useIndexDetails(key: string) {
   return { ...(state.key === key ? state : { key, details: null, loading: Boolean(key) }), reload }
 }
 
-function IndexPicker({ value, onChange }: { value: string; onChange: (key: string) => void }) {
+export function IndexPicker({ value, onChange, label = "Index", hint = "L’Index des items (objets) n’est pas encore proposé : ce n’est pas un index du monde." }: { value: string; onChange: (key: string) => void; label?: string; hint?: string }) {
   const indexes = useIndexCatalog()
-  return <Field label="Index" hint="L’Index des items (objets) n’est pas encore proposé : ce n’est pas un index du monde.">
+  return <Field label={label} hint={hint}>
     <select className={fieldClass} value={value} onChange={(event) => onChange(event.target.value)} disabled={!indexes}>
       <option value="">{indexes ? "Choisir un index…" : "Chargement des index…"}</option>
       {(indexes ?? []).map((entry) => <option key={entry.key} value={entry.key}>{entry.title}</option>)}
@@ -272,8 +273,10 @@ function SavedViewChoice({ block, tabs, onChange }: { block: ViewBlockSettings; 
   </>
 }
 
-function ViewSettings({ block, rowOf, onChange }: { block: Extract<PageBlock, { type: "view" }>; rowOf?: { index: string; tab?: string }; onChange: (patch: Partial<Extract<PageBlock, { type: "view" }>>) => void }) {
+function ViewSettings({ block, rowOf, pages, onChange }: { block: Extract<PageBlock, { type: "view" }>; rowOf?: { index: string; tab?: string }; pages: PageSummary[]; onChange: (patch: Partial<Extract<PageBlock, { type: "view" }>>) => void }) {
   const { details, loading, reload } = useIndexDetails(block.index)
+  const indexSettings = useIndexSettings(block.index)
+  const catalog = useIndexCatalog()
   const tab = details?.tabs.find((item) => item.name === block.tab)
   const configured = tab?.configured ?? []
   const presentation = isPresentationKind(block.kind)
@@ -292,6 +295,30 @@ function ViewSettings({ block, rowOf, onChange }: { block: Extract<PageBlock, { 
   const where = block.where
   // Un bloc qui montre une vue de l'index : la vue règle l'onglet, la forme, le filtre, le tri et le clic.
   const linked = Boolean(block.savedViewId)
+  // La forme que montre le bloc (propre à la page, une version de l'onglet, un preset, sinon celle de l'onglet) :
+  // choisir son « Au clic » ici en fait une forme propre à cette page, partie de celle-là.
+  const shownForm = (): Presentation => {
+    if (block.layout) return block.layout
+    if (block.presetId?.startsWith(PRESENTATION_VARIANT_PREFIX)) {
+      const tabViews = Object.entries(indexSettings.presentations).find(([name]) => foldName(name) === foldName(block.tab))?.[1]
+      const version = namedPresentationsOf(tabViews).find((item) => item.id === block.presetId!.slice(PRESENTATION_VARIANT_PREFIX.length))
+      if (version) return version.layout
+    } else if (block.presetId) {
+      const preset = [...builtinPresentationPresets, ...indexSettings.viewPresets].find((item) => item.id === block.presetId)
+      if (preset) return preset.layout
+    }
+    return startFrom(block.kind)
+  }
+  const ownClick = block.layout?.click ?? ""
+  const pickClick = (click: "" | PresentationClick) => {
+    if (!click) { if (block.layout) onChange({ layout: { ...block.layout, click: undefined } }); return }
+    onChange({ layout: { ...shownForm(), kind: block.kind, click }, presetId: undefined })
+  }
+  const indexTitle = catalog?.find((entry) => entry.key === block.index)?.title ?? block.index
+  const fichePage = pages.find((page) => !page.trashedAt && page.rowOf?.index === block.index && (!page.rowOf.tab || foldName(page.rowOf.tab) === foldName(block.tab)))
+  const ficheHint = fichePage
+    ? <>« {indexTitle} » a sa fiche-page : « {fichePage.title} »{fichePage.status !== "publiee" ? " (brouillon : les joueurs ne l’ont qu’une fois publiée)" : ""}.</>
+    : <>« {indexTitle} » n’a pas encore de fiche-page : crée-la dans l’Index des pages (« Nouvelle fiche-page »). D’ici là, la ligne ouvre la page qu’Eraser lui donne (une classe, un personnage…), sinon sa fiche.</>
   return <>
     <IndexPicker value={block.index} onChange={(index) => onChange({ index, tab: "", viewId: undefined, savedViewId: undefined, layout: undefined, presetId: undefined, cardId: undefined, where: undefined, sort: undefined })} />
     {block.index && <SavedViewChoice block={block} tabs={(details?.tabs ?? []).map((item) => item.name)} onChange={onChange} />}
@@ -355,16 +382,22 @@ function ViewSettings({ block, rowOf, onChange }: { block: Extract<PageBlock, { 
         </select>
       </Field>
     </div>
-    {rowOf?.index && block.tab && <Field label="Page de ligne : seulement les lignes liées" hint="Ne garde que les lignes dont cette colonne cite la ligne de la page (son nom dans une liste, ou une référence « { » vers elle).">
+    {rowOf?.index && block.tab && <Field label="Fiche-page : seulement les lignes liées" hint="Ne garde que les lignes dont cette colonne cite la ligne de la fiche-page (son nom dans une liste, ou une référence « { » vers elle).">
       <select className={fieldClass} value={block.rowMatch} onChange={(event) => onChange({ rowMatch: event.target.value })}>
         <option value="">Toutes les lignes (pas de filtre)</option>
         {columns.map((column) => <option key={column} value={column}>{column}</option>)}
       </select>
     </Field>}
-    {block.tab && !linked && presentation && <Field label="Au clic sur une ligne" hint={<>Celui de la vue : il se règle avec elle (dans l’index, Modifier › {kindLabel} › Éléments et clic, ou « Propre à cette page »). Sur une page, la fiche s’ouvre ici, en lecture, jamais dans l’index ; la page de la ligne, si elle en a une.{block.click ? <>{" "}<button type="button" className="font-medium text-primary hover:underline" onClick={() => onChange({ click: undefined })}>Retirer l’ancien réglage du bloc</button></> : null}</>}><span /></Field>}
-    {block.tab && !linked && !presentation && <Field label="Au clic sur une ligne" hint={block.click && block.click !== "-" ? "« {ID} » et « {Colonne} » prennent les valeurs de la ligne. La page ouverte vérifie toujours qui peut la voir." : !block.click ? "Sa fiche : sa page de ligne s’il y en a une, sinon sa page d’Eraser (une classe…) ou l’index (MJ et admins)." : undefined}>
+    {block.tab && !linked && presentation && <Field label="Au clic sur une ligne" hint={<>{ownClick === "page" ? ficheHint : !ownClick ? "Celui de la vue (réglé dans ses apparences, ou par sa carte)." : presentationClicks.find((entry) => entry.value === ownClick)?.hint}{block.click ? <>{" "}<button type="button" className="font-medium text-primary hover:underline" onClick={() => onChange({ click: undefined })}>Retirer l’ancien réglage du bloc</button></> : null}</>}>
+      <select className={fieldClass} value={ownClick} onChange={(event) => pickClick(event.target.value as "" | PresentationClick)}>
+        <option value="">Comme la vue</option>
+        <option value="page">Ouvrir sa fiche-page</option>
+        {presentationClicks.filter((entry) => entry.value !== "page").map((entry) => <option key={entry.value} value={entry.value}>{entry.label}</option>)}
+      </select>
+    </Field>}
+    {block.tab && !linked && !presentation && <Field label="Au clic sur une ligne" hint={block.click && block.click !== "-" ? "« {ID} » et « {Colonne} » prennent les valeurs de la ligne. La page ouverte vérifie toujours qui peut la voir." : !block.click ? ficheHint : undefined}>
       <select className={fieldClass} value={!block.click ? "" : block.click === "-" ? "-" : "href"} onChange={(event) => onChange({ click: event.target.value === "href" ? block.index === "campaigns" ? "/campagne/{ID}" : "/" : event.target.value || undefined })}>
-        <option value="">Ouvrir sa fiche</option>
+        <option value="">Ouvrir sa fiche-page</option>
         <option value="href">Ouvrir une adresse…</option>
         <option value="-">Rien</option>
       </select>
@@ -383,7 +416,7 @@ function RefreshLink({ onClick, loading }: { onClick: () => void; loading: boole
 function RowFieldsSettings({ block, rowOf, onChange }: { block: Extract<PageBlock, { type: "rowfields" }>; rowOf?: { index: string; tab?: string }; onChange: (patch: Partial<Extract<PageBlock, { type: "rowfields" }>>) => void }) {
   const { details, loading } = useIndexDetails(rowOf?.index ?? "")
   const columns = [...new Set((details?.tabs ?? []).filter((tab) => !rowOf?.tab || tab.name === rowOf.tab).flatMap((tab) => tab.columns ?? []))]
-  if (!rowOf?.index) return <Hint>Ce bloc sert sur la page de chaque ligne : règle d’abord la page (Réglages de la page › « Page de chaque ligne d’un index »).</Hint>
+  if (!rowOf?.index) return <Hint>Ce bloc sert sur une fiche-page : crée-la avec « Nouvelle fiche-page » (Index des pages), ou règle cette page (Réglages de la page › « Fiche-page d’un index »).</Hint>
   return <>
     <Field label="Colonnes montrées" hint="Aucune choisie : toutes les colonnes que le lecteur peut voir, dans l’ordre de l’onglet. Un joueur ne voit jamais les colonnes masquées ni les notes MJ.">
       {loading ? <span className="text-xs text-muted-foreground">Lecture de l’index…</span> : <div className="flex flex-wrap gap-1">
@@ -463,7 +496,7 @@ export function BlockSettings({ block, pages, live, rowOf, onChange, onDuplicate
     case "image": {
       const valid = !block.src || cleanImageSource(block.src) === block.src
       content = <>
-        <Field label="Adresse de l’image" error={valid ? undefined : "Une adresse https://, un fichier d’Eraser (/api/…) ou une colonne de la ligne ({Portrait})."} hint={rowOf?.index ? "Page de ligne : « {Portrait} » prend l’image de cette colonne de la ligne." : "Le lien de partage d’une image du Drive (Partager › Copier le lien), une image d’un index (clic droit › copier l’adresse de l’image) ou du web (https)."}>
+        <Field label="Adresse de l’image" error={valid ? undefined : "Une adresse https://, un fichier d’Eraser (/api/…) ou une colonne de la ligne ({Portrait})."} hint={rowOf?.index ? "Fiche-page : « {Portrait} » prend l’image de cette colonne de la ligne." : "Le lien de partage d’une image du Drive (Partager › Copier le lien), une image d’un index (clic droit › copier l’adresse de l’image) ou du web (https)."}>
           <input className={fieldClass} value={block.src} placeholder="https://…" onChange={(event) => set({ src: event.target.value.trim() }, "src")} />
         </Field>
         <Field label="Légende"><input className={fieldClass} value={block.caption} maxLength={300} placeholder="Facultative (sert aussi de texte de remplacement)" onChange={(event) => set({ caption: event.target.value }, "caption")} /></Field>
@@ -521,7 +554,7 @@ export function BlockSettings({ block, pages, live, rowOf, onChange, onDuplicate
       </>
       break
     case "view":
-      content = <ViewSettings block={block} rowOf={rowOf} onChange={(patch) => set(patch)} />
+      content = <ViewSettings block={block} rowOf={rowOf} pages={pages} onChange={(patch) => set(patch)} />
       break
     case "rowfields":
       content = <RowFieldsSettings block={block} rowOf={rowOf} onChange={(patch) => set(patch)} />
@@ -630,7 +663,7 @@ function ImageLookSettings({ block, onChange }: { block: Extract<PageBlock, { ty
   </>
 }
 
-function Hint({ children }: { children: ReactNode }) {
+export function Hint({ children }: { children: ReactNode }) {
   return <p className="text-[12px] leading-relaxed text-muted-foreground">{children}</p>
 }
 
@@ -658,14 +691,14 @@ function RowTemplateSettings({ rowOf, place, onChange }: { rowOf?: { index: stri
   const { details, loading } = useIndexDetails(rowOf?.index ?? "")
   return <>
     <IndexPicker value={rowOf?.index ?? ""} onChange={(index) => onChange(index ? { index } : undefined)} />
-    {rowOf?.index && <Field label="Onglet" hint="Un modèle d’onglet l’emporte sur celui de tout l’index.">
+    {rowOf?.index && <Field label="Onglet" hint="La fiche-page d’un onglet passe avant celle de tout l’index.">
       <select className={fieldClass} value={rowOf.tab ?? ""} disabled={loading} onChange={(event) => onChange(event.target.value ? { index: rowOf.index, tab: event.target.value } : { index: rowOf.index })}>
         <option value="">Toutes les lignes de l’index</option>
         {(details?.tabs ?? []).map((tab) => <option key={tab.name} value={tab.name}>{tab.name}</option>)}
       </select>
     </Field>}
-    <Hint>{rowOf?.index ? <>Chaque ligne a sa page à <code className="font-mono text-[11px]">/fiche/{rowOf.index}/ID</code>, ouverte depuis la fiche de la ligne et depuis les vues. Dans les blocs, « {"{Nom}"} », « {"{Image}"} »… prennent les valeurs de la ligne ; les blocs « Valeurs de la ligne » et « Cité dans » la montrent. Les carnets et les secrets sont communs à toutes les lignes.</> : "Choisis un index : cette page devient le modèle de la page de chacune de ses lignes."}</Hint>
-    {rowOf?.index && (place === "ressources" || place === "bac-a-sable" || place === "administration") && <p className="rounded-lg border border-[#9a6512]/35 bg-[#9a6512]/8 px-2.5 py-1.5 text-[11.5px] text-[#7a4f0e]">Rangée dans une section fermée aux joueurs : ils n’ouvriront pas ces pages. Range le modèle hors menu ou dans Règles pour eux.</p>}
+    <Hint>{rowOf?.index ? <>Chaque ligne a sa fiche-page à <code className="font-mono text-[11px]">/fiche/{rowOf.index}/ID</code>, ouverte par les cartes et les listes qui « ouvrent sa fiche-page », et depuis la fiche de la ligne. Dans les blocs, « {"{Nom}"} », « {"{Image}"} »… prennent les valeurs de la ligne ; les blocs « Valeurs de la ligne » et « Cité dans » la montrent. Les carnets et les secrets sont communs à toutes les lignes.</> : "Choisis un index : cette page devient la fiche-page de chacune de ses lignes."}</Hint>
+    {rowOf?.index && (place === "ressources" || place === "bac-a-sable" || place === "administration") && <p className="rounded-lg border border-[#9a6512]/35 bg-[#9a6512]/8 px-2.5 py-1.5 text-[11.5px] text-[#7a4f0e]">Rangée dans une section fermée aux joueurs : ils n’ouvriront pas ces pages. Range la fiche-page hors menu ou dans Règles pour eux.</p>}
   </>
 }
 
@@ -746,7 +779,7 @@ export function PageSettings({ page, pages, campaigns, isAdmin, linking, saveErr
       {page.replaces && <Hint>Réversible : choisis « Aucune » pour rendre la page d’origine ; « Versions brouillon » garde l’état d’une page pour y revenir. La connexion, les comptes, la corbeille, Google, Roll20 et le créateur de pages ne se remplacent jamais.</Hint>}
       </>}
     </Group>
-    <Group title="Page de chaque ligne d’un index" open={Boolean(page.rowOf?.index)} badge={page.rowOf?.index ? <span className="rounded-full border border-primary/35 bg-primary/8 px-1.5 text-[10.5px] font-semibold normal-case tracking-normal text-primary">modèle</span> : undefined}>
+    <Group title="Fiche-page d’un index" open={Boolean(page.rowOf?.index)} badge={page.rowOf?.index ? <span className="rounded-full border border-primary/35 bg-primary/8 px-1.5 text-[10.5px] font-semibold normal-case tracking-normal text-primary">fiche-page</span> : undefined}>
       {page.replaces ? <Hint>Cette page remplace ou complète une page d’Eraser : elle ne peut pas servir aussi de page pour chaque ligne d’un index.</Hint> : <RowTemplateSettings rowOf={page.rowOf} place={page.place} onChange={(rowOf) => onChange({ rowOf })} />}
     </Group>
     <Group title="Modèle et corbeille" open={false}>

@@ -2,12 +2,13 @@ import { PAGES_HREF } from "@/lib/app-menu"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useMemo, useState, type DragEvent } from "react"
-import { ArchiveRestore, ChevronRight, Eye, FilePlus2, FolderInput, FolderPlus, FolderTree as FolderTreeIcon, Inbox, LayoutGrid, LayoutTemplate, LibraryBig, List, LoaderCircle, PenLine, Search, Table2, Trash2, WandSparkles, X } from "lucide-react"
+import { ArchiveRestore, ChevronRight, Eye, FilePlus2, FileText, FolderInput, FolderPlus, FolderTree as FolderTreeIcon, Inbox, LayoutGrid, LayoutTemplate, LibraryBig, List, LoaderCircle, PenLine, Search, Table2, Trash2, WandSparkles, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { PageIcon, formatWhen } from "@/components/eraser/custom-page-view"
-import { fieldClass, Field } from "./page-studio-settings"
+import { fieldClass, Field, useIndexCatalog } from "./page-studio-settings"
+import { NewFichePageDialog } from "./fiche-page-ui"
 import { PageCreatorNav } from "./page-creator-nav"
 import { DRAG_FOLDER, DRAG_PAGES, FolderGlyph, FolderPickerDialog, FolderTree, NavEntry, RenameField, useDropTarget } from "./page-folders-ui"
 import { pagePlaces, pageVisibilities, type PagePlace, type PageRole, type PageSummary, studioHref } from "@/lib/custom-pages"
@@ -110,6 +111,7 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
   const [filter, setFilter] = useState<Filter>({ status: "", group: "", vis: "", look: "table", sort: "titre" })
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [creating, setCreating] = useState(Boolean(newPage))
+  const [creatingFiche, setCreatingFiche] = useState(false)
   const [draft, setDraft] = useState(() => ({ title: "", place: (pagePlaces.some((place) => place.value === newPage?.place) ? newPage!.place : "hors-menu") as PagePlace, campaignId: campaigns[0]?.id ?? "", template: newPage?.template ?? "", folder: "" }))
   const [busy, setBusy] = useState("")
   const [error, setError] = useState("")
@@ -118,8 +120,11 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
   const isAdmin = role === "admin"
   const campaignName = (id: string) => allCampaigns.find((campaign) => campaign.id === id)?.name ?? "Campagne"
 
+  // Les fiches-pages se lisent par le nom de leur index (« Fiche-page · Peuples »).
+  const catalog = useIndexCatalog()
+  const indexTitle = useMemo(() => { const titles = new Map((catalog ?? []).map((entry) => [entry.key, entry.title])); return (key: string) => titles.get(key) ?? key }, [catalog])
   // eslint-disable-next-line react-hooks/exhaustive-deps -- `campaignName` ne dépend que des campagnes, fixes
-  const all = useMemo(() => explorerPages(pages, eraser, campaignName), [pages, eraser])
+  const all = useMemo(() => explorerPages(pages, eraser, campaignName, indexTitle), [pages, eraser, indexTitle])
   const live = useMemo(() => all.filter((page) => !page.trashedAt), [all])
   const trashed = all.length - live.length
   const counts = useMemo(() => folderCounts(folders, live.map((page) => page.key)), [folders, live])
@@ -299,7 +304,10 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
       </section>
       <div className="flex flex-col items-end gap-2">
         <PageCreatorNav active={view === "modeles" ? "modeles" : "pages"} onTab={(tab) => { if (tab === "menu") return false; go(tab === "modeles" ? "modeles" : "racine"); return true }} />
-        <Button type="button" onClick={() => openCreate()}><FilePlus2 />Nouvelle page</Button>
+        <span className="flex flex-wrap justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => { setError(""); setCreatingFiche(true) }} title="La page de chaque ligne d’un index : chaque peuple, chaque lieu, chaque classe a la sienne"><FileText />Nouvelle fiche-page</Button>
+          <Button type="button" onClick={() => openCreate()}><FilePlus2 />Nouvelle page</Button>
+        </span>
       </div>
     </div>
 
@@ -489,6 +497,18 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {creatingFiche && <NewFichePageDialog
+      open
+      pages={pages}
+      onClose={() => setCreatingFiche(false)}
+      onOpenExisting={(id) => router.push(studioHref(id))}
+      onCreated={async (id) => {
+        // Rangée dans le dossier ouvert avant d'ouvrir l'atelier (le retour la retrouve là).
+        if (isFolderView(view)) await saveFolders([{ op: "place", keys: [id], folder: view }])
+        router.push(studioHref(id))
+      }}
+    />}
 
     {picker && <FolderPickerDialog
       open
