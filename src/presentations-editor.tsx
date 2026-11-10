@@ -8,7 +8,7 @@
  * montrent avec ces réglages.
  */
 import { useMemo, useRef, useState, type ReactNode } from "react"
-import { ArrowDown, ArrowUp, BookOpen, Maximize2, Bookmark, Check, Columns3, Gauge, Heading, Image as ImageIcon, LayoutGrid, LayoutList, ListTree, Monitor, MousePointerClick, Palette, Pencil, Plus, RotateCcw, Search, SearchX, Sigma, Smartphone, Sparkles, Star, Tablet, Users, X } from "lucide-react"
+import { ArrowDown, ArrowUp, BookOpen, Maximize2, Bookmark, Check, Columns3, Gauge, Heading, Image as ImageIcon, LayoutGrid, LayoutList, ListTree, MessageSquareQuote, Monitor, MousePointerClick, Palette, Pencil, Plus, RotateCcw, Search, SearchX, Sigma, Smartphone, Sparkles, Star, Tablet, Users, X } from "lucide-react"
 
 import { IndexCard } from "@/components/eraser/index-card"
 import { NewCardDialog, SingleCardEditor } from "@/components/eraser/index-card-editor"
@@ -31,9 +31,11 @@ import { cardId, pickCard, type CardColumn, type CardTemplate } from "@/lib/inde
 import { foldName, isNameColumnSpec } from "@/lib/index-columns"
 import { viewRoles, type ViewRole } from "@/lib/view-roles"
 import type { StatDefinition } from "@/lib/index-stats"
-import type { NamedLayout } from "@/lib/index-layouts"
+import type { IndexLayout, NamedLayout } from "@/lib/index-layouts"
+import { layoutColumnsFor } from "@/lib/index-appearance"
 import { LIST_FAMILY, MAIN_PRESENTATION_ID, builtinPresentationPresets, calendarFormChoices, calendarScaleOf, calendarScales, dashboardTileKinds, DEFAULT_ITEM_CARD, PRESENTATION_ITEM_CARD, fitLayoutToColumns, groupFormulaOps, listToolTypes, namedPresentationsOf, presentationKinds, presentationClicks, rowRuleOps, type CalendarForms, type CalendarScale, type DashboardTile, type KanbanLane, type ListTool, type NamedPresentation, type PresentationClick, type PresentationKind, type RowRule, type TabPresentations, type TileFormula, type Presentation, type PresentationLook, type PresentationPreset } from "@/lib/index-presentations"
 import { presentationStartersFor } from "./presentation-starters"
+import { HoverStudio } from "./hover-studio"
 import { cn } from "@/lib/utils"
 import { useEffect } from "react"
 
@@ -93,7 +95,7 @@ const partPages: Record<PreviewPart, string[]> = {
 }
 
 /** Ce qu'il faut à l'élément sur mesure d'une vue : les colonnes typées, quelques lignes, les cartes de l'onglet (pour partir d'elles). */
-export type ElementSource = { columns: CardColumn[]; samples: Array<Record<string, string>>; tabCards: CardTemplate[] }
+export type ElementSource = { columns: CardColumn[]; samples: Array<Record<string, string>>; tabCards: CardTemplate[]; /** Le survol de l'onglet (index) : le point de départ d'un survol propre. */ hoverBase?: IndexLayout | null }
 
 /** La formule d'un groupe (en-tête de section ou de colonne) : compte, somme… d'une colonne, contre une cible. */
 function GroupFormulaSettings({ ctx, what = "section" }: { ctx: Ctx; what?: string }) {
@@ -172,8 +174,28 @@ function ClickSettings({ ctx }: { ctx: Ctx }) {
     </SettingsRow>
     {panel && detail.kind === "form" && <DetailEditSettings ctx={ctx} />}
     <ClickByRoleSettings ctx={ctx} />
-    <HoverChoice value={layout.hover} hovers={ctx.hovers} onChange={(hover) => set({ hover })} disabled={disabled} fromCard={cardItem} />
+    {!layout.hoverLayout && <HoverChoice value={layout.hover} hovers={ctx.hovers} onChange={(hover) => set({ hover })} disabled={disabled} fromCard={cardItem} />}
+    <OwnHoverSettings ctx={ctx} />
   </div>
+}
+
+/**
+ * Le survol propre à la vue : réglé ici, en grand, comme une carte (l'éditeur des survols), sur les
+ * lignes de l'onglet. Il passe avant le survol choisi parmi ceux de l'index et celui de la carte.
+ */
+function OwnHoverSettings({ ctx }: { ctx: Ctx }) {
+  const { layout, set, disabled, element } = ctx
+  const [editing, setEditing] = useState(false)
+  if (!element) return null
+  const columns = layoutColumnsFor(element.columns.map((column) => ({ header: column.header, spec: column.spec })), "hover")
+  return <>
+    <div className="flex flex-wrap items-center gap-2">
+      <span className={cn(fieldLabel, "flex-1")}>{layout.hoverLayout ? "Survol propre à cette vue (il passe avant celui de l’index et de la carte)" : "Ou un survol propre à cette vue, réglé comme une carte"}</span>
+      <Button type="button" size="sm" variant={layout.hoverLayout ? "default" : "outline"} className="h-8" disabled={disabled} onClick={() => setEditing(true)}><MessageSquareQuote />{layout.hoverLayout ? "Modifier le survol" : "Créer un survol"}</Button>
+      {layout.hoverLayout && <Button type="button" size="sm" variant="ghost" className="h-8" disabled={disabled} onClick={() => set({ hoverLayout: undefined })}>Retirer</Button>}
+    </div>
+    {editing && <HoverStudio title="Survol des éléments" columns={columns} samples={element.samples} value={layout.hoverLayout} base={element.hoverBase} onApply={(hoverLayout) => set({ hoverLayout })} onClose={() => setEditing(false)} />}
+  </>
 }
 
 /** Le formulaire du détail : en lecture, modifiable directement, ou après « Modifier » ; par qui ; les champs qui restent en lecture. */
@@ -1570,7 +1592,7 @@ export function PartsPreview({ onPart, children, className }: { onPart: (part: P
 const screens = { phone: "24rem", tablet: "44rem", desktop: "100%" } as const
 const screenOptions: Array<{ value: keyof typeof screens; label: string; icon: ReactNode; title: string }> = [{ value: "phone", label: "", icon: <Smartphone className="size-3.5" />, title: "Téléphone" }, { value: "tablet", label: "", icon: <Tablet className="size-3.5" />, title: "Tablette" }, { value: "desktop", label: "", icon: <Monitor className="size-3.5" />, title: "Toute la largeur" }]
 
-export function IndexPresentationsEditor({ kind, versionId = MAIN_PRESENTATION_ID, tabName, columns, rows, value, onChange, optionsOf, cards = [], cardColumns = [], forms = [], hovers = [], stats = [], disabled = false }: {
+export function IndexPresentationsEditor({ kind, versionId = MAIN_PRESENTATION_ID, tabName, columns, rows, value, onChange, optionsOf, cards = [], cardColumns = [], forms = [], hovers = [], stats = [], disabled = false, hoverBase }: {
   /** La vue réglée (l'onglet de « Modifier » : Liste, Kanban…). */
   kind: PresentationKind
   /** La version de la vue modifiée (l'étoilée par défaut). */
@@ -1593,6 +1615,8 @@ export function IndexPresentationsEditor({ kind, versionId = MAIN_PRESENTATION_I
   /** Les statistiques de l'index (Modifier › Stats) : une tuile du tableau de bord en dessine une. */
   stats?: StatDefinition[]
   disabled?: boolean
+  /** Le survol de l'onglet (index) : le point de départ d'un survol propre à la vue. */
+  hoverBase?: IndexLayout | null
 }) {
   const [screen, setScreen] = useState<keyof typeof screens>("desktop")
   const [starting, setStarting] = useState(false)
@@ -1657,7 +1681,7 @@ export function IndexPresentationsEditor({ kind, versionId = MAIN_PRESENTATION_I
   return <div className="grid min-h-0 gap-3 lg:h-full lg:grid-cols-[minmax(20rem,28rem)_minmax(0,1fr)] xl:grid-cols-[minmax(22rem,32rem)_minmax(0,1fr)]">
     <div className="grid content-start gap-2 lg:min-h-0 lg:overflow-y-auto lg:pr-1">
       <div className="flex justify-end"><Button type="button" variant="outline" size="sm" className="h-7 text-[11px]" disabled={disabled} onClick={() => setStarting(true)} title="Repartir d’une forme de base, remplie avec les colonnes de cet onglet et dessinée sur ses lignes"><Sparkles className="size-3.5" />Forme de base</Button></div>
-      <PresentationKindSettings kind={kind} layout={layout} columns={columns} onChange={setLayout} element={cardColumns.length ? { columns: cardColumns, samples: rows, tabCards: cards } : undefined} cards={cards.map((card) => ({ id: card.id, name: card.name }))} forms={forms.map((form) => ({ id: form.id, name: form.name }))} hovers={hovers} stats={stats.map((stat) => ({ id: stat.id, title: stat.title }))} presentations={value} optionsOf={optionsOf} disabled={disabled} focus={focus} />
+      <PresentationKindSettings kind={kind} layout={layout} columns={columns} onChange={setLayout} element={cardColumns.length ? { columns: cardColumns, samples: rows, tabCards: cards, hoverBase } : undefined} cards={cards.map((card) => ({ id: card.id, name: card.name }))} forms={forms.map((form) => ({ id: form.id, name: form.name }))} hovers={hovers} stats={stats.map((stat) => ({ id: stat.id, title: stat.title }))} presentations={value} optionsOf={optionsOf} disabled={disabled} focus={focus} />
     </div>
     <section className="min-w-0 rounded-xl border bg-muted/20 p-3 lg:min-h-0 lg:overflow-auto" aria-label="Aperçu">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
