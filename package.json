@@ -1,6 +1,6 @@
 {
   "name": "eraser-page",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "description": "Eraser Page : l'atelier des pages d'Eraser, publié comme extension.",
   "eraserExtension": {

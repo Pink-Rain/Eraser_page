@@ -88,8 +88,9 @@ function PagesIndex({ eraser }: { eraser: EraserContext }) {
   return <Screen<IndexData> key="index" eraser={eraser} url="/api/pages/atelier?ecran=index" label="Index des pages">
     {(data) => <PageLabel label="Index des pages">
       <PageDirectory
-        // « Nouvelle page » depuis le menu, alors que l'Index est déjà ouvert : la fenêtre s'ouvre quand même.
-        key={wantsNew ? `nouvelle:${parameters.get("section") ?? ""}` : `index:${initialView}`}
+        // Jamais remonté quand l'adresse change : ouvrir un dossier réécrit `?dossier=`, et le
+        // remonter le repartait des données lues à l'ouverture (un dossier renommé reprenait son
+        // ancien nom, une page rangée revenait). Le dossier et « Nouvelle page » suivent l'adresse.
         {...data}
         newPage={wantsNew ? { place: parameters.get("section") ?? undefined, template: parameters.get("modele") ?? undefined } : undefined}
         initialView={initialView}
