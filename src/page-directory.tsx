@@ -1,7 +1,7 @@
 import { PAGES_HREF } from "@/lib/app-menu"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useMemo, useState, type DragEvent } from "react"
+import { useEffect, useMemo, useState, type DragEvent } from "react"
 import { ArchiveRestore, ChevronRight, Eye, FilePlus2, FileText, FolderInput, FolderPlus, FolderTree as FolderTreeIcon, Inbox, LayoutGrid, LayoutTemplate, LibraryBig, List, LoaderCircle, PenLine, Search, Table2, Trash2, WandSparkles, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -119,6 +119,24 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
   const [picker, setPicker] = useState<{ keys: string[]; current: string | null } | null>(null)
   const isAdmin = role === "admin"
   const campaignName = (id: string) => allCampaigns.find((campaign) => campaign.id === id)?.name ?? "Campagne"
+
+  // L'Index reste monté quand l'adresse change (src/main.tsx) : il en suit le dossier ou la vue
+  // (« go » réécrit l'adresse, qui revient donc ici sans rien changer)…
+  useEffect(() => {
+    const next = !isFolderView(initialView) || folders.folders.some((folder) => folder.id === initialView) ? initialView : "racine"
+    setView((current) => current === next ? current : next)
+    if (isFolderView(next)) setExpanded((current) => new Set([...current, ...folderPath(folders, next).map((folder) => folder.id)]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seule l'adresse compte, pas chaque rangement
+  }, [initialView])
+  // … et « Nouvelle page » depuis le menu, alors que l'Index est déjà ouvert, ouvre la fenêtre.
+  const newPageKey = newPage ? `${newPage.place ?? ""}|${newPage.template ?? ""}` : ""
+  useEffect(() => {
+    if (!newPageKey || !newPage) return
+    setError("")
+    setDraft((current) => ({ ...current, title: "", place: (pagePlaces.some((place) => place.value === newPage.place) ? newPage.place : current.place) as PagePlace, template: newPage.template ?? "" }))
+    setCreating(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- une nouvelle demande, pas chaque rendu
+  }, [newPageKey])
 
   // Les fiches-pages se lisent par le nom de leur index (« Fiche-page · Peuples »).
   const catalog = useIndexCatalog()
