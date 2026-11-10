@@ -48,6 +48,13 @@ la section « Extensions » de l'`ARCHITECTURE.md` d'Eraser.
   (Index des pages) la crée avec une page de départ ; l'atelier la dessine sur une ligne d'exemple
   (gardée sur l'ordinateur) et l'aperçu la montre remplie comme sa vraie page. Un bloc Vue s'y relie
   par « Au clic sur une ligne › Ouvrir sa fiche-page » (une forme propre à la page, clic `page`).
+- **Survol propre** (`src/hover-studio.tsx`) : une carte (`hoverLayout` de la carte du bloc, bandeau
+  au-dessus de l'éditeur des cartes) ou une présentation (réglages de l'élément) garde son propre
+  survol, fait en grand avec l'éditeur des survols d'Eraser ; il part du survol de l'onglet
+  (`hoverBase`). Aussi dans les apparences d'un index.
+- **« Voir comme Joueur »** : l'aperçu ne lit jamais avec les droits de l'admin. Les blocs passent
+  `as=joueur` à Eraser (`asPlayer`) ; la ligne d'exemple d'une fiche-page est relue par Eraser
+  (`row-preview`, `useFicheExample(…, asPlayer)`), jamais filtrée ici.
 - Ce qui charge encore porte `aria-busy="true"` (écran `Screen`, apparences) : le relevé de
   fluidité d'Eraser compte l'ouverture de l'extension, et le changement de page, jusqu'à ce qu'il
   n'y en ait plus. Un nouvel écran qui lit ses données fait de même.

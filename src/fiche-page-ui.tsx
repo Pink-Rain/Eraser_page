@@ -185,9 +185,10 @@ function formIdsOf(sections: StudioPage["sections"]) {
 /**
  * La ligne d'exemple d'une fiche-page : les lignes de son index (de son onglet), celle choisie
  * (gardée sur cet ordinateur, la première d'office), et ce que la fiche-page en reçoit, comme sur
- * sa vraie page (ses valeurs, sa fiche).
+ * sa vraie page (ses valeurs, sa fiche). `asPlayer` (« Voir comme Joueur ») : la ligne est lue par
+ * Eraser comme un joueur la lirait (colonnes cachées et notes du MJ absentes), jamais ici.
  */
-export function useFicheExample(pageId: string, rowOf: { index: string; tab?: string } | undefined, sections: StudioPage["sections"]) {
+export function useFicheExample(pageId: string, rowOf: { index: string; tab?: string } | undefined, sections: StudioPage["sections"], asPlayer = false) {
   const key = rowOf?.index ?? ""
   const { data, error } = useIndexData(key)
   const { layouts } = useIndexSettings(key)
@@ -207,8 +208,27 @@ export function useFicheExample(pageId: string, rowOf: { index: string; tab?: st
     for (const formId of formIds ? formIds.split("|") : []) { const layout = tabFormOrBuiltin(layouts, key, table.tabName, formId); if (layout) forms[formId] = layout }
     return { ...context, ...(form ? { form } : {}), ...(Object.keys(forms).length ? { forms } : {}) }
   }, [data, example, formIds, key, layouts])
+  // Comme un joueur : la ligne telle que sa vraie page la recevrait pour lui, lue sur Eraser.
+  const playerUrl = asPlayer && key && example ? `/api/pages/block-data?row-preview=1&rowIndex=${encodeURIComponent(key)}&rowId=${encodeURIComponent(example.id)}&as=joueur${formIds ? `&forms=${encodeURIComponent(formIds.split("|").join(","))}` : ""}` : ""
+  const [player, setPlayer] = useState<{ url: string; row: RowContext | null; error: string }>({ url: "", row: null, error: "" })
+  useEffect(() => {
+    if (!playerUrl) return
+    let alive = true
+    fetch(playerUrl).then(async (response) => {
+      const body = (await response.json().catch(() => ({}))) as { row?: RowContext; error?: string }
+      if (!alive) return
+      setPlayer(response.ok && body.row ? { url: playerUrl, row: body.row, error: "" } : { url: playerUrl, row: null, error: body.error || "La ligne d’exemple n’a pas pu être lue comme un joueur." })
+    }).catch(() => { if (alive) setPlayer({ url: playerUrl, row: null, error: "Eraser ne répond pas : réessaie dans un instant." }) })
+    return () => { alive = false }
+  }, [playerUrl])
+  const playerState = player.url === playerUrl ? player : { url: playerUrl, row: null, error: "" }
   const choose = (id: string) => { setChosen(id); writeExample(pageId, id) }
-  return { indexTitle: data?.definition.title ?? key, examples, example, choose, row, loading: Boolean(key) && !data && !error, error }
+  return {
+    indexTitle: data?.definition.title ?? key, examples, example, choose,
+    row: asPlayer ? playerState.row : row,
+    loading: (Boolean(key) && !data && !error) || (Boolean(playerUrl) && !playerState.row && !playerState.error),
+    error: error || playerState.error,
+  }
 }
 
 /** Le bandeau d'une fiche-page dans l'atelier : son index, la ligne d'exemple, l'aperçu sur elle. */

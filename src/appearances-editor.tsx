@@ -424,6 +424,7 @@ export function AppearancesEditor({ model, open, title, intro, initialMode = "ca
                 forms={[{ id: DEFAULT_FORM_ID, name: "Formulaire principal", layout: layoutOf(tab, "form").layout }, ...namedLayoutsOf(tab, "form")]}
                 hovers={namedLayoutsOf(tab, "hover").map((hover) => ({ id: hover.id, name: hover.name }))}
                 stats={stats}
+                hoverBase={layoutOf(tab, "hover").layout}
               />
             </section>
           })()}

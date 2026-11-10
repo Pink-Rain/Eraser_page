@@ -13,7 +13,7 @@
  * son tri compris), lues par Eraser comme pour le bloc.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
-import { BookmarkPlus, Check, LayoutGrid, LoaderCircle, Palette, Plus, Sparkles } from "lucide-react"
+import { BookmarkPlus, Check, LayoutGrid, LoaderCircle, MessageSquareQuote, Palette, Plus, Sparkles } from "lucide-react"
 
 import { useContainedWheel, useDockArea } from "@/components/eraser/editor-dock"
 import { NewCardDialog, SingleCardEditor, duplicateCard } from "@/components/eraser/index-card-editor"
@@ -34,6 +34,7 @@ import { DEFAULT_ITEM_CARD, LIST_FAMILY, MAIN_PRESENTATION_ID, PRESENTATION_ITEM
 import { cn } from "@/lib/utils"
 
 import { blockIcons } from "./page-studio-icons"
+import { HoverStudio } from "./hover-studio"
 import { IndexPresentationsEditor } from "./presentations-editor"
 import { presentationStartersFor } from "./presentation-starters"
 import { useIndexDetails } from "./page-studio-settings"
@@ -96,6 +97,8 @@ export function BlockAppearanceStudio({ block, onApply, onClose }: {
     ...(tabLayoutsOf(settings.layouts, block.tab)?.forms ?? []),
   ], [block.index, block.tab, settings.layouts, sourceColumns])
   const hovers = (tabLayouts?.hovers ?? []).map((hover) => ({ id: hover.id, name: hover.name }))
+  // Le survol de l'onglet (l'étoilé, sinon celui d'Eraser) : le point de départ d'un survol propre.
+  const hoverBase = tabLayoutOrBuiltin(settings.layouts, block.index, block.tab, "hover")
   const optionsOf = (header: string) => (data?.specs[header]?.options ?? []).map((option) => ({ value: option.value, color: option.color }))
 
   /* ---------- L'apparence en cours ---------- */
@@ -110,6 +113,7 @@ export function BlockAppearanceStudio({ block, onApply, onClose }: {
   // Chaque forme essayée garde ses réglages : y revenir les retrouve.
   const [memory, setMemory] = useState<Partial<Record<ViewBlockKind, Draft>>>({})
   const [creatingCard, setCreatingCard] = useState(false)
+  const [editingHover, setEditingHover] = useState(false)
   const [naming, setNaming] = useState(false)
   const [confirmClose, setConfirmClose] = useState(false)
   const changed = Boolean(draft) && JSON.stringify(draft) !== initial
@@ -199,7 +203,16 @@ export function BlockAppearanceStudio({ block, onApply, onClose }: {
     <div onClickCapture={(event) => { event.preventDefault(); event.stopPropagation() }}><PageViewBlock block={{ ...block, kind: "table", layout: undefined, presetId: undefined, card: undefined, heading: "" }} source={{ direct: true }} /></div>
   </section>
   else if (draft.kind === "cards") body = draft.card
-    ? <section className="min-h-0 overflow-y-auto lg:overflow-hidden"><SingleCardEditor key={draft.card.id} card={draft.card} columns={cardColumns} samples={samples} onChange={(card) => setDraft({ kind: "cards", card })} extras={{ hovers: [{ id: DEFAULT_FORM_ID, name: "Survol principal" }, ...hovers], forms: forms.map((form) => ({ id: form.id, name: form.name })), cards: [], tabs: [block.tab], family: "world" }} /></section>
+    ? <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] gap-2">
+      {/* Le survol de la carte, réglé ici comme la carte : propre à cette page. */}
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/25 px-3 py-1.5">
+        <MessageSquareQuote className="size-4 shrink-0 text-primary" />
+        <span className="min-w-0 flex-1 text-[12.5px] text-muted-foreground">{draft.card.hoverLayout ? "Survol propre à cette carte : il passe avant celui choisi dans la carte." : "Au passage de la souris : le survol choisi dans la carte, ou un survol propre, réglé ici comme la carte."}</span>
+        <Button type="button" size="sm" variant={draft.card.hoverLayout ? "default" : "outline"} className="h-8" onClick={() => setEditingHover(true)}><MessageSquareQuote />{draft.card.hoverLayout ? "Modifier le survol" : "Créer un survol"}</Button>
+        {draft.card.hoverLayout && <Button type="button" size="sm" variant="ghost" className="h-8" onClick={() => { const { hoverLayout: _removed, ...card } = draft.card!; setDraft({ kind: "cards", card }) }}>Retirer</Button>}
+      </div>
+      <div className="min-h-0 overflow-y-auto lg:overflow-hidden"><SingleCardEditor key={draft.card.id} card={draft.card} columns={cardColumns} samples={samples} onChange={(card) => setDraft({ kind: "cards", card })} extras={{ hovers: [{ id: DEFAULT_FORM_ID, name: "Survol principal" }, ...hovers], forms: forms.map((form) => ({ id: form.id, name: form.name })), cards: [], tabs: [block.tab], family: "world" }} /></div>
+    </section>
     : <section className="grid place-items-center rounded-xl border border-dashed p-10 text-center">
       <div className="grid max-w-md gap-3">
         <LayoutGrid className="mx-auto size-8 text-primary/50" />
@@ -225,6 +238,7 @@ export function BlockAppearanceStudio({ block, onApply, onClose }: {
     cardColumns={cardColumns}
     forms={forms}
     hovers={hovers}
+    hoverBase={hoverBase}
   />
 
   return <>
@@ -276,6 +290,16 @@ export function BlockAppearanceStudio({ block, onApply, onClose }: {
       builtinsHint="Une copie, à régler pour cette page seulement."
       onPick={(card) => { setDraft({ kind: "cards", card }); setCreatingCard(false) }}
       onClose={() => setCreatingCard(false)}
+    />}
+
+    {editingHover && draft?.kind === "cards" && draft.card && <HoverStudio
+      title="Survol de la carte"
+      columns={layoutColumnsFor(sourceColumns, "hover")}
+      samples={samples}
+      value={draft.card.hoverLayout}
+      base={hoverBase}
+      onApply={(hoverLayout) => { const { hoverLayout: _previous, ...card } = draft.card!; setDraft({ kind: "cards", card: hoverLayout ? { ...card, hoverLayout } : card }) }}
+      onClose={() => setEditingHover(false)}
     />}
 
     {naming && draft && <NamePresetDialog

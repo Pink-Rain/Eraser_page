@@ -681,7 +681,7 @@ export function PageStudio({ initial, pages: initialPages, campaigns, linking, r
   }, [doc, mode, viewAs])
   const previewContext: BlockContext = { source: { direct: true, asPlayer: viewAs === "joueur" }, canReveal: viewAs !== "joueur", links }
   // Une fiche-page se dessine sur une ligne d'exemple de son index : l'aperçu la montre remplie, comme sa vraie page.
-  const fiche = useFicheExample(doc.id, doc.rowOf, doc.sections)
+  const fiche = useFicheExample(doc.id, doc.rowOf, doc.sections, viewAs === "joueur")
   const ficheRow = doc.rowOf?.index ? fiche.row : null
   const previewFiche = () => { void flush(); setMode("preview"); setDrawer(null) }
 
@@ -749,15 +749,20 @@ export function PageStudio({ initial, pages: initialPages, campaigns, linking, r
       <main aria-label="La page" className={`@container min-w-0 rounded-[18px] border bg-background ${mode === "build" ? "border-dashed p-3 sm:p-4" : "mx-auto w-full max-w-[70rem] px-4 py-6 shadow-[0_14px_36px_rgb(67_50_31/0.12)] sm:px-8 sm:py-9"}`} onClick={(event) => { if (mode === "build" && event.target === event.currentTarget) select(null) }}>
         {mode === "preview" ? <>
           <div className="mb-6 flex flex-wrap items-center justify-between gap-2 border-b pb-3 text-[12.5px] text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5"><Eye className="size-3.5" />{ficheRow ? <>Aperçu sur la ligne d’exemple <b className="text-foreground">« {ficheRow.name} »</b> · le brouillon, tel qu’il serait publié (valeurs et vues lues comme administrateur)</> : <>Aperçu comme <b className="text-foreground">{roleLabels[viewAs]}</b>{doc.place === "campagne" ? " (membre de la campagne)" : ""} · le brouillon, tel qu’il serait publié</>}</span>
+            <span className="inline-flex items-center gap-1.5"><Eye className="size-3.5" />{ficheRow ? <>Aperçu sur la ligne d’exemple <b className="text-foreground">« {ficheRow.name} »</b> comme <b className="text-foreground">{roleLabels[viewAs]}</b> · le brouillon, tel qu’il serait publié ({viewAs === "joueur" ? "valeurs et vues lues comme un joueur : ce qui lui est caché n’y est pas" : "valeurs et vues lues comme MJ et admin"})</> : <>Aperçu comme <b className="text-foreground">{roleLabels[viewAs]}</b>{doc.place === "campagne" ? " (membre de la campagne)" : ""} · le brouillon, tel qu’il serait publié</>}</span>
             <Button type="button" size="xs" variant="outline" onClick={() => setMode("build")}><Hammer />Revenir à l’atelier</Button>
           </div>
           {preview && ficheRow ? (save.kind === "saved"
             // La fiche-page remplie avec la ligne d'exemple, comme à son adresse : ses vues et « Cité dans » lisent le brouillon enregistré.
-            ? <CustomPageView key={`${doc.updatedAt}:${ficheRow.tab}:${ficheRow.id}`} initial={{ ...preview, editable: false, draft: true }} row={ficheRow} links={links} eyebrow={`${ficheRow.indexTitle} · ${ficheRow.tab}`} blocksOnly={false} />
+            ? <CustomPageView key={`${doc.updatedAt}:${ficheRow.tab}:${ficheRow.id}:${viewAs}`} initial={{ ...preview, editable: false, draft: true }} row={ficheRow} links={links} eyebrow={`${ficheRow.indexTitle} · ${ficheRow.tab}`} blocksOnly={false} asPlayer={viewAs === "joueur"} />
             : save.kind === "error" || save.kind === "conflict"
               ? <p className="flex items-start gap-2 rounded-xl border border-dashed px-4 py-4 text-sm text-muted-foreground"><CloudAlert className="mt-0.5 size-4 shrink-0" />Le brouillon n’est pas enregistré : l’aperçu sur la ligne d’exemple l’attend (voir le message plus haut).</p>
               : <p className="flex items-center gap-2 rounded-xl border border-dashed px-4 py-4 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Enregistrement du brouillon avant l’aperçu…</p>)
+          : preview && doc.rowOf?.index && (fiche.loading || fiche.error)
+            // Une fiche-page attend sa ligne d'exemple (lue comme un joueur en « Voir comme Joueur ») : jamais la page sans elle.
+            ? fiche.error
+              ? <p className="flex items-start gap-2 rounded-xl border border-dashed px-4 py-4 text-sm text-muted-foreground"><CloudAlert className="mt-0.5 size-4 shrink-0" />{fiche.error}</p>
+              : <p className="flex items-center gap-2 rounded-xl border border-dashed px-4 py-4 text-sm text-muted-foreground"><LoaderCircle className="size-4 animate-spin" />Lecture de la ligne d’exemple{viewAs === "joueur" ? " comme un joueur" : ""}…</p>
           : preview ? <>
             {!preview.hideHeader && <PageHeader eyebrow={doc.place === "hors-menu" ? "Page" : crumb} title={preview.title} description={preview.description} icon={preview.icon} emoji={preview.emoji} />}
             <div className="mt-10">{preview.sections.some((section) => section.cols.some((column) => column.length)) ? <PageSections sections={preview.sections} render={(block) => <BlockView block={block} context={previewContext} />} /> : <p className="rounded-2xl border border-dashed px-5 py-12 text-center text-sm text-muted-foreground">Rien à montrer à ce rôle.</p>}</div>
