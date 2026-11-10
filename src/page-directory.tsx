@@ -2,7 +2,7 @@ import { PAGES_HREF } from "@/lib/app-menu"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState, type DragEvent } from "react"
-import { ArchiveRestore, ChevronRight, Eye, FilePlus2, FileText, FolderInput, FolderPlus, FolderTree as FolderTreeIcon, Inbox, LayoutGrid, LayoutTemplate, LibraryBig, List, LoaderCircle, PenLine, Search, Table2, Trash2, WandSparkles, X } from "lucide-react"
+import { ArchiveRestore, ChevronRight, Eye, FilePlus2, FileText, FolderInput, FolderPlus, FolderTree as FolderTreeIcon, Inbox, LayoutGrid, LayoutTemplate, LibraryBig, List, LoaderCircle, PenLine, Search, SlidersHorizontal, Table2, Trash2, WandSparkles, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -42,11 +42,19 @@ type Filter = { status: "" | "publiee" | "brouillon" | "modifiee"; group: string
 const fixedViews = new Set(["racine", "toutes", "corbeille", "modeles"])
 const isFolderView = (view: View) => !fixedViews.has(view)
 
-function StatusPill({ page }: { page: ExplorerPage }) {
+/**
+ * L'état d'une page, seulement quand il sort de l'ordinaire : publiée pour tout le monde, c'est le
+ * cas de presque toutes, et cent pastilles « Publiée · Tout le monde » noient celles qui comptent.
+ */
+function StatePills({ page }: { page: ExplorerPage }) {
   if (page.trashedAt) return <span className="rounded-full border bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Corbeille</span>
+  const draft = page.status !== "publiee"
+  const pending = !draft && page.unpublished
+  if (!draft && !pending && page.vis === "tous") return null
   return <span className="inline-flex flex-wrap items-center gap-1">
-    <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${page.status === "publiee" ? "border-[#0f7a65]/40 bg-[#0f7a65]/10 text-[#0f7a65]" : "border-[#9a6512]/40 bg-[#9a6512]/10 text-[#9a6512]"}`}>{page.status === "publiee" ? "Publiée" : "Brouillon"}</span>
-    {page.status === "publiee" && page.unpublished && <span className="text-[11px] text-muted-foreground" title="Des modifications de l’atelier ne sont pas encore publiées">· modifiée</span>}
+    {draft && <span className="whitespace-nowrap rounded-full border border-[#9a6512]/40 bg-[#9a6512]/10 px-2 py-0.5 text-[11px] font-semibold text-[#9a6512]">Brouillon</span>}
+    {pending && <span className="whitespace-nowrap rounded-full border border-[#9a6512]/40 bg-[#9a6512]/10 px-2 py-0.5 text-[11px] font-semibold text-[#9a6512]" title="Publiée, mais tes derniers changements dans l’atelier ne le sont pas encore">À publier</span>}
+    {page.vis !== "tous" && <VisPill vis={page.vis} />}
   </span>
 }
 
@@ -110,6 +118,8 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
   const [query, setQuery] = useState("")
   const [filter, setFilter] = useState<Filter>({ status: "", group: "", vis: "", look: "table", sort: "titre" })
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [showFilters, setShowFilters] = useState(false)
+  const [eraserOpen, setEraserOpen] = useState(false)
   const [creating, setCreating] = useState(Boolean(newPage))
   const [creatingFiche, setCreatingFiche] = useState(false)
   const [draft, setDraft] = useState(() => ({ title: "", place: (pagePlaces.some((place) => place.value === newPage?.place) ? newPage!.place : "hors-menu") as PagePlace, campaignId: campaigns[0]?.id ?? "", template: newPage?.template ?? "", folder: "" }))
@@ -166,6 +176,15 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
   }, [all, live, view, searching, folders, filter, query])
   const tiles = view === "racine" || isFolderView(view) ? (searching ? [] : childFolders(folders, view === "racine" ? "" : view)) : []
   const showFolderColumn = searching || view === "toutes" || view === "corbeille"
+  const noFilter: Filter = { status: "", group: "", vis: "", look: "table", sort: "titre" }
+  const filterCount = [filter.status, filter.group, filter.vis].filter(Boolean).length + (filter.look !== "table" ? 1 : 0) + (filter.sort !== "titre" ? 1 : 0)
+  const filtersShown = showFilters || filterCount > 0
+  // Calme : tes pages d'abord ; celles d'Eraser que personne n'a reprises attendent repliées en
+  // dessous, par section. « Toutes les pages », la recherche et les filtres montrent tout à plat.
+  const calm = !searching && filterCount === 0 && (view === "racine" || isFolderView(view))
+  const mine = calm ? rows.filter((page) => page.id) : rows
+  const untouched = calm ? rows.filter((page) => !page.id) : []
+  const untouchedGroups = [...new Set(eraser.map((entry) => entry.group))].map((group) => [group, untouched.filter((page) => page.group === group)] as const).filter(([, list]) => list.length)
   const rowId = (page: ExplorerPage) => page.id || page.key
 
   function go(next: View) {
@@ -304,7 +323,65 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
       {page.id && page.editable && <Button type="button" size="icon-xs" variant="ghost" className="hover:text-destructive" title={page.path ? "Mettre ses modifications à la corbeille (la page revient telle qu’Eraser la livre)" : "Mettre à la corbeille"} aria-label={`Mettre ${page.title} à la corbeille`} disabled={Boolean(busy)} onClick={() => void act(page, "trash")}><Trash2 /></Button>}
     </>
 
-  const allChecked = rows.length > 0 && rows.every((page) => selected.has(rowId(page)))
+  const pageTable = (list: ExplorerPage[]) => {
+    const allChecked = list.length > 0 && list.every((page) => selected.has(rowId(page)))
+    return <div className="overflow-x-auto rounded-2xl border bg-card">
+      <table className="w-full border-collapse text-[13px]">
+        <thead><tr>
+          <th scope="col" className="w-8 border-b bg-muted px-3 py-2"><input type="checkbox" aria-label="Tout sélectionner" checked={allChecked} onChange={() => setSelected(allChecked ? new Set() : new Set(list.map(rowId)))} className="size-3.5 accent-[var(--primary)]" /></th>
+          {["Page", ...(showFolderColumn ? ["Dossier"] : []), "Emplacement", "État", "Modifiée", ""].map((label) => <th key={label} scope="col" className="whitespace-nowrap border-b bg-muted px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label || <span className="sr-only">Actions</span>}</th>)}
+        </tr></thead>
+        <tbody>{list.map((page) => {
+          const id = rowId(page)
+          const checked = selected.has(id)
+          return <tr key={id} draggable={!page.trashedAt} onDragStart={(event) => startDrag(event, page)} className={`border-b border-border/60 last:border-b-0 ${checked ? "bg-primary/6" : "hover:bg-background/50"}`}>
+            <td className="px-3 py-2"><input type="checkbox" aria-label={`Sélectionner ${page.title}`} checked={checked} onChange={() => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} className="size-3.5 accent-[var(--primary)]" /></td>
+            <td className="px-3 py-2">
+              <button type="button" disabled={!page.editable || Boolean(page.trashedAt)} onClick={() => void open(page)} className="group flex items-center gap-2.5 text-left disabled:cursor-default">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-primary/20 bg-primary/8 text-primary"><PageIcon icon={page.icon} emoji={page.emoji} className="size-4" /></span>
+                <span className="min-w-0"><b className="block whitespace-nowrap font-display text-[15px] group-enabled:group-hover:text-primary group-enabled:group-hover:underline group-enabled:group-hover:underline-offset-3">{page.title}</b><small className="block max-w-[26rem] truncate font-mono text-[11px] text-muted-foreground" title={page.href}>{page.href}</small></span>
+              </button>
+            </td>
+            {showFolderColumn && <td className="px-3 py-2">{folderOfRow(page)
+              ? <button type="button" onClick={() => go(folderOfRow(page))} className="inline-flex max-w-56 items-center gap-1 truncate rounded-md px-1 text-muted-foreground hover:bg-muted hover:text-foreground"><FolderGlyph className="size-3.5 shrink-0" /><span className="truncate">{folderPathLabel(folders, folderOfRow(page))}</span></button>
+              : <span className="text-muted-foreground/60">—</span>}</td>}
+            <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{page.where}</td>
+            <td className="px-3 py-2"><StatePills page={page} /></td>
+            <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{page.updatedAt ? <>{formatWhen(page.updatedAt)}{page.updatedBy ? <small className="block text-[11px]">{page.updatedBy}</small> : null}</> : "—"}</td>
+            <td className="px-3 py-2"><div className="flex items-center justify-end gap-1">{actions(page)}</div></td>
+          </tr>
+        })}</tbody>
+      </table>
+    </div>
+  }
+
+  /** Les pages d'Eraser que personne n'a reprises : repliées, par section, en petites tuiles. */
+  const eraserShelf = <section aria-label="Les pages d’Eraser" className="mt-8">
+    <button type="button" aria-expanded={eraserOpen} onClick={() => setEraserOpen(!eraserOpen)} className="flex w-full items-center gap-3 rounded-2xl border border-dashed bg-card/50 px-4 py-3 text-left transition hover:border-primary/35 hover:bg-card/80">
+      <ChevronRight className={`size-4 shrink-0 text-muted-foreground transition ${eraserOpen ? "rotate-90" : ""}`} />
+      <span className="min-w-0 flex-1">
+        <b className="block font-display text-[17px]">Les pages d’Eraser</b>
+        <small className="block text-[12.5px] leading-snug text-muted-foreground">Telles qu’Eraser les livre : tu ne les as jamais changées. « Ouvrir » en reprend une dans l’atelier, et elle passe dans tes pages.</small>
+      </span>
+      <span className="rounded-full border bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">{untouched.length}</span>
+    </button>
+    {eraserOpen && <div className="mt-4 grid gap-5">
+      {untouchedGroups.map(([group, list]) => <div key={group}>
+        <h3 className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">{group}</h3>
+        <div className="grid gap-2 [grid-template-columns:repeat(auto-fill,minmax(min(17rem,100%),1fr))]">
+          {list.map((page) => <div key={page.key} draggable onDragStart={(event) => startDrag(event, page)} title={page.href} className="flex items-center gap-2.5 rounded-xl border bg-card/85 px-3 py-2">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/8 text-primary"><PageIcon icon={page.icon} emoji={page.emoji} className="size-3.5" /></span>
+            <span className="min-w-0 flex-1">
+              <b className="block font-display text-[14px] leading-tight [overflow-wrap:anywhere]">{page.title}</b>
+              {page.vis !== "tous" && <span className="mt-0.5 inline-flex"><VisPill vis={page.vis} /></span>}
+            </span>
+            {page.visitable && <Button asChild size="icon-xs" variant="ghost" title="Voir la page" aria-label={`Voir ${page.title}`}><Link href={page.href} prefetch={false}><Eye /></Link></Button>}
+            {page.editable && <Button type="button" size="xs" variant="outline" disabled={Boolean(busy)} onClick={() => void open(page)}>{busy === `open:${page.key}` ? <LoaderCircle className="animate-spin" /> : <PenLine />}Ouvrir</Button>}
+          </div>)}
+        </div>
+      </div>)}
+    </div>}
+  </section>
   const heading = view === "toutes" ? "Toutes les pages" : view === "corbeille" ? "Corbeille" : view === "modeles" ? "Modèles" : currentFolder?.name ?? "Pages"
   const visibleKeys = new Set(rows.map((page) => page.key))
 
@@ -316,7 +393,7 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
           <div className="mt-1 flex size-12 shrink-0 items-center justify-center rounded-2xl border bg-card/90 text-primary shadow-[0_8px_25px_rgb(67_50_31/0.06)]"><LibraryBig className="size-5" /></div>
           <div>
             <h1 className="font-display text-4xl font-semibold tracking-[-0.025em] sm:text-5xl">Index des pages</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">Toutes les pages d’Eraser, celles que tu crées comme celles qu’il livre, rangées dans tes dossiers. Glisse une page sur un dossier pour l’y ranger ; « Ouvrir » la modifie dans l’atelier.</p>
+            <p className="mt-4 max-w-2xl text-base leading-7 text-muted-foreground">Tes pages en premier ; celles qu’Eraser livre attendent, repliées, en dessous. « Ouvrir » modifie une page dans l’atelier ; glisse-la sur un dossier pour l’y ranger.</p>
           </div>
         </div>
       </section>
@@ -402,6 +479,8 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
                 <input value={query} onChange={(event) => { setQuery(event.target.value); setSelected(new Set()) }} onKeyDown={(event) => { if (event.key === "Escape") setQuery("") }} placeholder="Chercher dans toutes les pages : titre, adresse, dossier…" aria-label="Chercher une page" className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none" />
                 {searching && <button type="button" aria-label="Effacer la recherche" onClick={() => setQuery("")}><X className="size-3.5 text-muted-foreground" /></button>}
               </label>
+              <Button type="button" variant="outline" className="h-9" aria-expanded={filtersShown} onClick={() => { if (filtersShown) { setShowFilters(false); setFilter(noFilter) } else setShowFilters(true) }} title={filtersShown ? "Masquer les filtres (et les remettre à zéro)" : "Statut, section, visibilité, ordre, affichage"}><SlidersHorizontal />{filtersShown ? "Masquer les filtres" : "Filtres et affichage"}{filterCount ? ` · ${filterCount}` : ""}</Button>
+              {filtersShown && <>
               <select aria-label="Statut" className={`${fieldClass.replace("w-full ", "")} h-9 w-auto`} value={filter.status} onChange={(event) => setFilter({ ...filter, status: event.target.value as Filter["status"] })}>
                 <option value="">Tout statut</option><option value="publiee">Publiées</option><option value="modifiee">Publiées, modifiées depuis</option><option value="brouillon">Brouillons</option>
               </select>
@@ -423,6 +502,7 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
                 <NativeSelectOption value="">Autre vue…</NativeSelectOption>
                 {pageViewKinds.filter((kind) => kind.value !== "cards" && kind.value !== "list").map((kind) => <NativeSelectOption key={kind.value} value={kind.value}>{kind.label}</NativeSelectOption>)}
               </NativeSelect>
+              </>}
             </div>
 
             {tiles.length > 0 && <div className="mt-5 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(14rem,100%),1fr))]">
@@ -438,6 +518,7 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
                   {view !== "corbeille" && <Button type="button" size="xs" variant="secondary" disabled={Boolean(busy)} onClick={() => void actOnSelection("trash")}><Trash2 />Corbeille</Button>}
                   <button type="button" aria-label="Tout désélectionner" onClick={() => setSelected(new Set())} className="rounded p-0.5 hover:bg-background/15"><X className="size-3.5" /></button>
                 </span>
+                : calm ? <span>{mine.length} page{mine.length > 1 ? "s" : ""} à toi{untouched.length ? ` · ${untouched.length} page${untouched.length > 1 ? "s" : ""} d’Eraser repliée${untouched.length > 1 ? "s" : ""} en dessous` : ""}</span>
                 : <span>{rows.length} page{rows.length > 1 ? "s" : ""}{view === "corbeille" ? " dans la corbeille" : ""}{tiles.length ? ` · ${tiles.length} dossier${tiles.length > 1 ? "s" : ""}` : ""}{filter.look === "table" && rows.length > 1 && view !== "corbeille" ? " · coche des pages, ou glisse-les sur un dossier, pour les ranger" : ""}</span>}
             </div>
 
@@ -448,35 +529,12 @@ export function PageDirectory({ pages: initialPages, eraser = [], indexRows = []
                 <p>{view === "corbeille" ? "La corbeille est vide." : searching ? "Aucune page ne correspond à cette recherche." : currentFolder ? (tiles.length ? "Aucune page directement dans ce dossier." : "Ce dossier est vide. Glisse des pages dessus depuis « Toutes les pages », ou crée-en une ici.") : "Aucune page ne correspond à ces filtres."}</p>
                 {currentFolder && !searching && <Button type="button" variant="outline" onClick={() => openCreate()}><FilePlus2 />Nouvelle page ici</Button>}
               </div>
-              : <div className="overflow-x-auto rounded-2xl border bg-card">
-                <table className="w-full border-collapse text-[13px]">
-                  <thead><tr>
-                    <th scope="col" className="w-8 border-b bg-muted px-3 py-2"><input type="checkbox" aria-label="Tout sélectionner" checked={allChecked} onChange={() => setSelected(allChecked ? new Set() : new Set(rows.map(rowId)))} className="size-3.5 accent-[var(--primary)]" /></th>
-                    {["Page", ...(showFolderColumn ? ["Dossier"] : []), "Emplacement", "Visibilité", "Statut", "Modifiée", ""].map((label) => <th key={label} scope="col" className="whitespace-nowrap border-b bg-muted px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{label || <span className="sr-only">Actions</span>}</th>)}
-                  </tr></thead>
-                  <tbody>{rows.map((page) => {
-                    const id = rowId(page)
-                    const checked = selected.has(id)
-                    return <tr key={id} draggable={!page.trashedAt} onDragStart={(event) => startDrag(event, page)} className={`border-b border-border/60 last:border-b-0 ${checked ? "bg-primary/6" : "hover:bg-background/50"}`}>
-                      <td className="px-3 py-2"><input type="checkbox" aria-label={`Sélectionner ${page.title}`} checked={checked} onChange={() => setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next })} className="size-3.5 accent-[var(--primary)]" /></td>
-                      <td className="px-3 py-2">
-                        <button type="button" disabled={!page.editable || Boolean(page.trashedAt)} onClick={() => void open(page)} className="group flex items-center gap-2.5 text-left disabled:cursor-default">
-                          <span className="flex size-8 shrink-0 items-center justify-center rounded-[9px] border border-primary/20 bg-primary/8 text-primary"><PageIcon icon={page.icon} emoji={page.emoji} className="size-4" /></span>
-                          <span className="min-w-0"><b className="block whitespace-nowrap font-display text-[15px] group-enabled:group-hover:text-primary group-enabled:group-hover:underline group-enabled:group-hover:underline-offset-3">{page.title}</b><small className="block max-w-[26rem] truncate font-mono text-[11px] text-muted-foreground" title={page.href}>{page.href}</small></span>
-                        </button>
-                      </td>
-                      {showFolderColumn && <td className="px-3 py-2">{folderOfRow(page)
-                        ? <button type="button" onClick={() => go(folderOfRow(page))} className="inline-flex max-w-56 items-center gap-1 truncate rounded-md px-1 text-muted-foreground hover:bg-muted hover:text-foreground"><FolderGlyph className="size-3.5 shrink-0" /><span className="truncate">{folderPathLabel(folders, folderOfRow(page))}</span></button>
-                        : <span className="text-muted-foreground/60">—</span>}</td>}
-                      <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{page.where}</td>
-                      <td className="px-3 py-2"><VisPill vis={page.vis} /></td>
-                      <td className="px-3 py-2"><StatusPill page={page} /></td>
-                      <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">{page.updatedAt ? <>{formatWhen(page.updatedAt)}{page.updatedBy ? <small className="block text-[11px]">{page.updatedBy}</small> : null}</> : "—"}</td>
-                      <td className="px-3 py-2"><div className="flex items-center justify-end gap-1">{actions(page)}</div></td>
-                    </tr>
-                  })}</tbody>
-                </table>
-              </div>}
+              : calm
+              ? <>
+                {mine.length > 0 ? pageTable(mine) : <p className="rounded-2xl border border-dashed px-5 py-6 text-center text-sm text-muted-foreground">{currentFolder ? "Aucune de tes pages dans ce dossier." : "Tu n’as encore créé ni changé aucune page."} Celles d’Eraser sont juste en dessous.</p>}
+                {untouched.length > 0 && eraserShelf}
+              </>
+              : pageTable(rows)}
           </>}
       </section>
     </div>
